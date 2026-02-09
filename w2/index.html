@@ -54,13 +54,12 @@
             min-width: 300px;
         }
         
+        /* FIX: Don't override default file input styling */
         input[type="file"] {
-            width: 100%;
-            padding: 10px;
-            border: 2px dashed #3498db;
-            border-radius: 5px;
-            background-color: #f8f9fa;
+            padding: 8px;
             margin-top: 5px;
+            width: 100%;
+            box-sizing: border-box;
         }
         
         button {
@@ -239,6 +238,20 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        
+        .file-input-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        
+        .sample-data {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #e8f4fc;
+            border-radius: 5px;
+            border-left: 4px solid #3498db;
+        }
     </style>
 </head>
 <body>
@@ -247,20 +260,31 @@
     <!-- Data Load Section -->
     <section>
         <h2 class="section-title">1. Load Data</h2>
+        <p>Upload your Titanic dataset CSV files:</p>
+        
         <div class="file-input-group">
             <div class="file-input-container">
-                <label for="trainFile"><strong>Training Data (train.csv):</strong></label>
+                <label for="trainFile" class="file-input-label">Training Data (train.csv):</label>
                 <input type="file" id="trainFile" accept=".csv">
                 <div class="status" id="trainStatus">No file selected</div>
             </div>
             <div class="file-input-container">
-                <label for="testFile"><strong>Testing Data (test.csv):</strong></label>
+                <label for="testFile" class="file-input-label">Testing Data (test.csv):</label>
                 <input type="file" id="testFile" accept=".csv">
-                <div class="status" id="testStatus">No file selected</div>
+                <div class="status" id="testStatus">No file selected (optional)</div>
             </div>
         </div>
         
         <button id="loadDataBtn">Load & Inspect Data</button>
+        
+        <div class="sample-data">
+            <p><strong>Need sample data?</strong> Download Titanic dataset from:</p>
+            <ul>
+                <li><a href="https://www.kaggle.com/c/titanic/data" target="_blank">Kaggle Titanic Dataset</a> (requires login)</li>
+                <li><a href="https://web.stanford.edu/class/archive/cs/cs109/cs109.1166/problem12.html" target="_blank">Stanford Titanic Dataset</a></li>
+            </ul>
+            <p>Use <code>train.csv</code> for training and <code>test.csv</code> for predictions.</p>
+        </div>
         
         <div id="dataPreview" class="data-preview"></div>
         <div class="status" id="dataInfo"></div>
@@ -361,7 +385,6 @@
                 <li>Test the URL to ensure the app loads correctly</li>
             </ol>
             <p><strong>Note:</strong> This app runs entirely in the browser using TensorFlow.js. No server-side processing is required.</p>
-            <p><strong>Sample Data:</strong> You can download Titanic dataset from <a href="https://www.kaggle.com/c/titanic/data" target="_blank">Kaggle</a>.</p>
         </div>
     </section>
     
