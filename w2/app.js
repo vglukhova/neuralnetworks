@@ -1,5 +1,5 @@
 // Titanic Binary Classifier - TensorFlow.js
-// Complete browser-based implementation for Kaggle Titanic dataset
+// Complete browser-based implementation
 
 // ============================================================================
 // GLOBAL VARIABLES
@@ -23,7 +23,7 @@ let testPredictions = null;
 let testProbabilities = null;
 let testPassengerIds = null;
 
-// Feature flags for toggling engineered features
+// Feature flags
 let includeFamilySize = true;
 let includeIsAlone = true;
 
@@ -32,56 +32,34 @@ let includeIsAlone = true;
 // ============================================================================
 
 /**
- * Parse CSV data with proper quote handling
- * @param {string} text - CSV text content
- * @returns {Array} Array of parsed rows
+ * Simple CSV parser
  */
 function parseCSV(text) {
     const rows = [];
     let currentRow = [];
-    let currentCell = "";
+    let currentCell = '';
     let insideQuotes = false;
     
     for (let i = 0; i < text.length; i++) {
         const char = text[i];
-        const nextChar = text[i + 1] || "";
         
         if (char === '"') {
-            if (insideQuotes && nextChar === '"') {
-                // Escaped quote inside quoted field
-                currentCell += '"';
-                i++; // Skip next character
-            } else {
-                // Start or end of quoted field
-                insideQuotes = !insideQuotes;
-            }
+            insideQuotes = !insideQuotes;
         } else if (char === ',' && !insideQuotes) {
-            // End of cell
             currentRow.push(currentCell);
-            currentCell = "";
+            currentCell = '';
         } else if (char === '\n' && !insideQuotes) {
-            // End of row (handle both \n and \r\n)
             currentRow.push(currentCell);
             rows.push(currentRow);
             currentRow = [];
-            currentCell = "";
-            
-            // Skip \r if present
-            if (nextChar === '\r') i++;
-        } else if (char === '\r' && !insideQuotes) {
-            // Handle \r as line break (Mac style)
-            currentRow.push(currentCell);
-            rows.push(currentRow);
-            currentRow = [];
-            currentCell = "";
+            currentCell = '';
         } else {
-            // Regular character
             currentCell += char;
         }
     }
     
-    // Add last row if exists
-    if (currentCell !== "" || currentRow.length > 0) {
+    // Last row
+    if (currentCell !== '' || currentRow.length > 0) {
         currentRow.push(currentCell);
         rows.push(currentRow);
     }
@@ -90,10 +68,7 @@ function parseCSV(text) {
 }
 
 /**
- * Update status message with styling
- * @param {string} elementId - ID of status element
- * @param {string} message - Status message
- * @param {string} type - 'normal', 'success', 'error', or 'warning'
+ * Update status message
  */
 function updateStatus(elementId, message, type = 'normal') {
     const element = document.getElementById(elementId);
@@ -112,11 +87,7 @@ function updateStatus(elementId, message, type = 'normal') {
 }
 
 /**
- * Create a simple HTML table from data
- * @param {Array} headers - Table headers
- * @param {Array} data - Table rows
- * @param {number} maxRows - Maximum rows to display
- * @returns {string} HTML table string
+ * Create HTML table
  */
 function createTable(headers, data, maxRows = 10) {
     let html = '<table class="evaluation-table">';
@@ -139,9 +110,8 @@ function createTable(headers, data, maxRows = 10) {
     });
     html += '</tbody>';
     
-    // Show row count if truncated
     if (data.length > maxRows) {
-        html += `<tfoot><tr><td colspan="${headers.length}" style="text-align: center; font-style: italic;">Showing ${maxRows} of ${data.length} rows</td></tr></tfoot>`;
+        html += `<tfoot><tr><td colspan="${headers.length}" style="text-align: center;">Showing ${maxRows} of ${data.length} rows</td></tr></tfoot>`;
     }
     
     html += '</table>';
@@ -149,9 +119,7 @@ function createTable(headers, data, maxRows = 10) {
 }
 
 /**
- * Download data as CSV file
- * @param {string} content - CSV content
- * @param {string} filename - Filename for download
+ * Download CSV file
  */
 function downloadCSV(content, filename) {
     const blob = new Blob([content], { type: 'text/csv' });
@@ -166,19 +134,13 @@ function downloadCSV(content, filename) {
 }
 
 /**
- * Export CSV with proper quoting and escaping
- * @param {Array} headers - Column headers
- * @param {Array} data - Array of data rows
- * @param {string} filename - Output filename
+ * Export CSV with proper quoting
  */
 function exportCSV(headers, data, filename) {
-    // Quote headers
     let csv = headers.map(h => `"${h}"`).join(',') + '\n';
     
-    // Quote and escape data rows
     data.forEach(row => {
         const escapedRow = row.map(val => {
-            // Convert to string and escape double quotes
             const strVal = String(val);
             return `"${strVal.replace(/"/g, '""')}"`;
         });
@@ -189,12 +151,7 @@ function exportCSV(headers, data, filename) {
 }
 
 /**
- * Calculate metrics from confusion matrix
- * @param {number} tp - True positives
- * @param {number} fp - False positives
- * @param {number} fn - False negatives
- * @param {number} tn - True negatives
- * @returns {Object} Metrics object
+ * Calculate metrics
  */
 function calculateMetrics(tp, fp, fn, tn) {
     const accuracy = (tp + tn) / (tp + fp + fn + tn);
@@ -215,9 +172,7 @@ function calculateMetrics(tp, fp, fn, tn) {
 // ============================================================================
 
 /**
- * Load CSV file from file input
- * @param {HTMLInputElement} fileInput - File input element
- * @returns {Promise} Promise resolving to parsed data
+ * Load CSV file
  */
 async function loadCSVFile(fileInput) {
     return new Promise((resolve, reject) => {
@@ -235,17 +190,15 @@ async function loadCSVFile(fileInput) {
                 const rows = parseCSV(text);
                 
                 if (rows.length < 2) {
-                    reject(new Error('CSV file is empty or has no data rows'));
+                    reject(new Error('CSV file is empty'));
                     return;
                 }
                 
-                // Extract headers and data
                 const headers = rows[0];
                 const data = rows.slice(1);
-                
                 resolve({ headers, data });
             } catch (error) {
-                reject(new Error(`Failed to parse CSV: ${error.message}`));
+                reject(new Error('Failed to parse CSV'));
             }
         };
         
@@ -258,15 +211,11 @@ async function loadCSVFile(fileInput) {
 }
 
 /**
- * Load and inspect both train and test datasets
+ * Load and inspect data
  */
 async function loadAndInspectData() {
     try {
         updateStatus('dataStatus', 'Loading CSV files...', 'normal');
-        
-        // Reset previous data
-        rawTrainData = null;
-        rawTestData = null;
         
         // Load train data
         const trainFileInput = document.getElementById('trainFile');
@@ -278,22 +227,16 @@ async function loadAndInspectData() {
         const testResult = await loadCSVFile(testFileInput);
         rawTestData = testResult;
         
-        // Validate data structure
+        // Validate
         if (!rawTrainData.headers.includes('Survived')) {
             throw new Error('Train CSV must contain "Survived" column');
         }
         
-        if (!rawTrainData.headers.includes('PassengerId') || !rawTestData.headers.includes('PassengerId')) {
-            throw new Error('Both CSVs must contain "PassengerId" column');
-        }
-        
-        // Show preview tables
+        // Show preview
         document.getElementById('dataPreview').style.display = 'block';
         
         // Train preview
         const trainPreviewRows = rawTrainData.data.slice(0, 5).map(row => {
-            const previewRow = [];
-            // Show selected columns for preview
             const passengerIdIdx = rawTrainData.headers.indexOf('PassengerId');
             const survivedIdx = rawTrainData.headers.indexOf('Survived');
             const pclassIdx = rawTrainData.headers.indexOf('Pclass');
@@ -301,14 +244,14 @@ async function loadAndInspectData() {
             const sexIdx = rawTrainData.headers.indexOf('Sex');
             const ageIdx = rawTrainData.headers.indexOf('Age');
             
-            previewRow.push(row[passengerIdIdx] || '');
-            previewRow.push(row[survivedIdx] || '');
-            previewRow.push(row[pclassIdx] || '');
-            previewRow.push((row[nameIdx] || '').substring(0, 20) + '...');
-            previewRow.push(row[sexIdx] || '');
-            previewRow.push(row[ageIdx] || '');
-            
-            return previewRow;
+            return [
+                row[passengerIdIdx] || '',
+                row[survivedIdx] || '',
+                row[pclassIdx] || '',
+                (row[nameIdx] || '').substring(0, 15) + '...',
+                row[sexIdx] || '',
+                row[ageIdx] || ''
+            ];
         });
         
         document.getElementById('trainPreview').innerHTML = createTable(
@@ -319,20 +262,19 @@ async function loadAndInspectData() {
         
         // Test preview
         const testPreviewRows = rawTestData.data.slice(0, 5).map(row => {
-            const previewRow = [];
             const passengerIdIdx = rawTestData.headers.indexOf('PassengerId');
             const pclassIdx = rawTestData.headers.indexOf('Pclass');
             const nameIdx = rawTestData.headers.indexOf('Name');
             const sexIdx = rawTestData.headers.indexOf('Sex');
             const ageIdx = rawTestData.headers.indexOf('Age');
             
-            previewRow.push(row[passengerIdIdx] || '');
-            previewRow.push(row[pclassIdx] || '');
-            previewRow.push((row[nameIdx] || '').substring(0, 20) + '...');
-            previewRow.push(row[sexIdx] || '');
-            previewRow.push(row[ageIdx] || '');
-            
-            return previewRow;
+            return [
+                row[passengerIdIdx] || '',
+                row[pclassIdx] || '',
+                (row[nameIdx] || '').substring(0, 15) + '...',
+                row[sexIdx] || '',
+                row[ageIdx] || ''
+            ];
         });
         
         document.getElementById('testPreview').innerHTML = createTable(
@@ -341,41 +283,27 @@ async function loadAndInspectData() {
             5
         );
         
-        // Calculate and display data stats
+        // Stats
         const trainRows = rawTrainData.data.length;
         const testRows = rawTestData.data.length;
         const trainCols = rawTrainData.headers.length;
         const testCols = rawTestData.headers.length;
         
-        // Count missing values in key columns
-        const ageIdx = rawTrainData.headers.indexOf('Age');
-        const embarkedIdx = rawTrainData.headers.indexOf('Embarked');
-        
-        const missingAge = rawTrainData.data.filter(row => !row[ageIdx] || row[ageIdx].trim() === '').length;
-        const missingEmbarked = rawTrainData.data.filter(row => !row[embarkedIdx] || row[embarkedIdx].trim() === '').length;
-        
-        // Survival stats
         const survivedIdx = rawTrainData.headers.indexOf('Survived');
         const totalSurvived = rawTrainData.data.filter(row => row[survivedIdx] === '1').length;
         const survivalRate = (totalSurvived / trainRows * 100).toFixed(1);
         
         updateStatus('dataStatus', 
-            `✅ Data loaded successfully! Train: ${trainRows} rows × ${trainCols} cols, Test: ${testRows} rows × ${testCols} cols. ` +
-            `Survival rate: ${survivalRate}%. Missing values: Age (${missingAge}), Embarked (${missingEmbarked}).`,
+            `✅ Data loaded! Train: ${trainRows} rows, Test: ${testRows} rows. Survival rate: ${survivalRate}%`,
             'success'
         );
         
-        // Enable preprocessing button
+        // Enable preprocessing
         document.getElementById('preprocessBtn').disabled = false;
         
-        // Log for debugging
-        console.log('Train data shape:', [trainRows, trainCols]);
-        console.log('Test data shape:', [testRows, testCols]);
-        console.log('Train headers:', rawTrainData.headers);
-        
     } catch (error) {
-        updateStatus('dataStatus', `❌ Error loading data: ${error.message}`, 'error');
-        console.error('Data loading error:', error);
+        updateStatus('dataStatus', `❌ Error: ${error.message}`, 'error');
+        console.error('Load error:', error);
     }
 }
 
@@ -384,14 +312,10 @@ async function loadAndInspectData() {
 // ============================================================================
 
 /**
- * Extract features from raw data
- * @param {Array} data - Raw data rows
- * @param {Array} headers - Column headers
- * @param {boolean} isTraining - Whether this is training data (has Survived)
- * @returns {Object} Processed features and targets
+ * Extract features
  */
 function extractFeatures(data, headers, isTraining = true) {
-    // Index key columns
+    // Get indices
     const passengerIdIdx = headers.indexOf('PassengerId');
     const survivedIdx = isTraining ? headers.indexOf('Survived') : -1;
     const pclassIdx = headers.indexOf('Pclass');
@@ -406,21 +330,18 @@ function extractFeatures(data, headers, isTraining = true) {
     const targets = [];
     const passengerIds = [];
     
-    // Collect all values for imputation calculations
+    // Collect for stats
     const ages = [];
     const fares = [];
     const embarkedValues = [];
     
     for (const row of data) {
-        // PassengerId
         passengerIds.push(row[passengerIdIdx]);
         
-        // Target (if training)
         if (isTraining && survivedIdx !== -1) {
             targets.push(parseInt(row[survivedIdx]) || 0);
         }
         
-        // Collect values for imputation
         const age = parseFloat(row[ageIdx]);
         if (!isNaN(age)) ages.push(age);
         
@@ -433,14 +354,13 @@ function extractFeatures(data, headers, isTraining = true) {
         }
     }
     
-    // Calculate imputation values
+    // Calculate stats
     const medianAge = ages.length > 0 ? 
         ages.sort((a, b) => a - b)[Math.floor(ages.length / 2)] : 30;
     
     const medianFare = fares.length > 0 ? 
         fares.sort((a, b) => a - b)[Math.floor(fares.length / 2)] : 32;
     
-    // Find mode of Embarked
     const embarkedCounts = {};
     embarkedValues.forEach(val => {
         embarkedCounts[val] = (embarkedCounts[val] || 0) + 1;
@@ -448,24 +368,23 @@ function extractFeatures(data, headers, isTraining = true) {
     const modeEmbarked = Object.keys(embarkedCounts).length > 0 ?
         Object.keys(embarkedCounts).reduce((a, b) => embarkedCounts[a] > embarkedCounts[b] ? a : b) : 'S';
     
-    // Calculate standardization stats
     const meanAge = ages.reduce((a, b) => a + b, 0) / ages.length || medianAge;
     const stdAge = Math.sqrt(ages.reduce((sq, n) => sq + Math.pow(n - meanAge, 2), 0) / ages.length) || 10;
     
     const meanFare = fares.reduce((a, b) => a + b, 0) / fares.length || medianFare;
     const stdFare = Math.sqrt(fares.reduce((sq, n) => sq + Math.pow(n - meanFare, 2), 0) / fares.length) || 20;
     
-    // Process each row
+    // Process rows
     for (const row of data) {
         const featureRow = [];
         
-        // Pclass (one-hot encoded)
+        // Pclass (one-hot)
         const pclass = parseInt(row[pclassIdx]) || 1;
         featureRow.push(pclass === 1 ? 1 : 0);
         featureRow.push(pclass === 2 ? 1 : 0);
         featureRow.push(pclass === 3 ? 1 : 0);
         
-        // Sex (one-hot: female=1, male=0)
+        // Sex
         const sex = (row[sexIdx] || '').toLowerCase();
         featureRow.push(sex === 'female' ? 1 : 0);
         
@@ -480,15 +399,13 @@ function extractFeatures(data, headers, isTraining = true) {
         featureRow.push(sibSp);
         featureRow.push(parch);
         
-        // FamilySize and IsAlone (engineered features)
+        // Engineered features
         if (includeFamilySize) {
-            const familySize = sibSp + parch + 1;
-            featureRow.push(familySize);
+            featureRow.push(sibSp + parch + 1);
         }
         
         if (includeIsAlone) {
-            const isAlone = (sibSp === 0 && parch === 0) ? 1 : 0;
-            featureRow.push(isAlone);
+            featureRow.push((sibSp === 0 && parch === 0) ? 1 : 0);
         }
         
         // Fare (standardized)
@@ -496,7 +413,7 @@ function extractFeatures(data, headers, isTraining = true) {
         if (isNaN(fare)) fare = medianFare;
         featureRow.push((fare - meanFare) / stdFare);
         
-        // Embarked (one-hot encoded)
+        // Embarked (one-hot)
         let embarked = (row[embarkedIdx] || '').trim();
         if (embarked === '') embarked = modeEmbarked;
         featureRow.push(embarked === 'C' ? 1 : 0);
@@ -506,7 +423,7 @@ function extractFeatures(data, headers, isTraining = true) {
         features.push(featureRow);
     }
     
-    // Create feature names
+    // Feature names
     const baseFeatureNames = [
         'Pclass_1', 'Pclass_2', 'Pclass_3',
         'Sex_female',
@@ -532,7 +449,7 @@ function extractFeatures(data, headers, isTraining = true) {
 }
 
 /**
- * Preprocess the loaded data
+ * Preprocess data
  */
 function preprocessData() {
     try {
@@ -542,15 +459,15 @@ function preprocessData() {
             throw new Error('Please load data first');
         }
         
-        // Process training data
+        // Process train data
         const trainResult = extractFeatures(rawTrainData.data, rawTrainData.headers, true);
         processedTrainData = trainResult;
         
-        // Process test data (using training stats for consistent standardization)
+        // Process test data
         const testResult = extractFeatures(rawTestData.data, rawTestData.headers, false);
         processedTestData = testResult;
         
-        // Store feature info for later use
+        // Store info
         featureInfo = {
             names: trainResult.featureNames,
             stats: trainResult.stats,
@@ -572,51 +489,37 @@ function preprocessData() {
             passengerIds: testResult.passengerIds
         };
         
-        // Show preprocessing info
+        // Show info
         document.getElementById('preprocessInfo').style.display = 'block';
         
         const featureInfoHTML = `
-            <p><strong>Processed Features (${featureInfo.trainShape[1]} total):</strong> ${featureInfo.names.join(', ')}</p>
-            <p><strong>Training Data Shape:</strong> ${featureInfo.trainShape[0]} samples × ${featureInfo.trainShape[1]} features</p>
-            <p><strong>Test Data Shape:</strong> ${featureInfo.testShape[0]} samples × ${featureInfo.testShape[1]} features</p>
-            <p><strong>Preprocessing Stats:</strong></p>
-            <ul>
-                <li>Age: mean=${featureInfo.stats.meanAge.toFixed(2)}, std=${featureInfo.stats.stdAge.toFixed(2)}</li>
-                <li>Fare: mean=${featureInfo.stats.meanFare.toFixed(2)}, std=${featureInfo.stats.stdFare.toFixed(2)}</li>
-                <li>Embarked mode: ${featureInfo.stats.modeEmbarked}</li>
-                <li>Family features: ${includeFamilySize ? 'FamilySize included' : 'excluded'}, ${includeIsAlone ? 'IsAlone included' : 'excluded'}</li>
-            </ul>
+            <p><strong>Features (${featureInfo.trainShape[1]}):</strong> ${featureInfo.names.join(', ')}</p>
+            <p><strong>Training:</strong> ${featureInfo.trainShape[0]} samples</p>
+            <p><strong>Test:</strong> ${featureInfo.testShape[0]} samples</p>
         `;
         
         document.getElementById('featureInfo').innerHTML = featureInfoHTML;
         
         updateStatus('preprocessStatus', 
-            `✅ Preprocessing complete! ${featureInfo.trainShape[1]} features created. Ready for model creation.`,
+            `✅ Preprocessing complete! ${featureInfo.trainShape[1]} features created.`,
             'success'
         );
         
-        // Enable model creation button
+        // Enable model creation
         document.getElementById('createModelBtn').disabled = false;
         document.getElementById('toggleFeatureBtn').disabled = false;
         
-        console.log('Preprocessing complete. Feature names:', featureInfo.names);
-        console.log('Training features shape:', trainTensors.features.shape);
-        console.log('Test features shape:', testTensors.features.shape);
-        
     } catch (error) {
-        updateStatus('preprocessStatus', `❌ Preprocessing error: ${error.message}`, 'error');
-        console.error('Preprocessing error:', error);
+        updateStatus('preprocessStatus', `❌ Error: ${error.message}`, 'error');
     }
 }
 
 /**
- * Toggle engineered features
+ * Toggle features
  */
 function toggleFeatures() {
     includeFamilySize = !includeFamilySize;
     includeIsAlone = !includeIsAlone;
-    
-    // Re-preprocess data
     preprocessData();
 }
 
@@ -625,7 +528,7 @@ function toggleFeatures() {
 // ============================================================================
 
 /**
- * Create the neural network model
+ * Create model
  */
 function createModel() {
     try {
@@ -637,10 +540,10 @@ function createModel() {
         
         const numFeatures = processedTrainData.features[0].length;
         
-        // Create sequential model
+        // Create model
         model = tf.sequential();
         
-        // Hidden layer (single hidden layer as required)
+        // Hidden layer
         model.add(tf.layers.dense({
             units: 16,
             activation: 'relu',
@@ -648,71 +551,47 @@ function createModel() {
             name: 'hidden_layer'
         }));
         
-        // Output layer (binary classification)
+        // Output layer
         model.add(tf.layers.dense({
             units: 1,
             activation: 'sigmoid',
             name: 'output_layer'
         }));
         
-        // Compile model
+        // Compile
         model.compile({
             optimizer: tf.train.adam(0.001),
             loss: 'binaryCrossentropy',
             metrics: ['accuracy']
         });
         
-        // Show model summary
+        // Show summary
         document.getElementById('modelSummary').style.display = 'block';
         
-        let summaryHTML = '<p><strong>Model Architecture:</strong></p>';
-        summaryHTML += '<ul>';
+        let summaryHTML = '<p><strong>Model:</strong></p><ul>';
         model.layers.forEach((layer, i) => {
             summaryHTML += `<li>Layer ${i+1}: ${layer.name} - ${layer.outputShape}</li>`;
         });
         summaryHTML += '</ul>';
         
-        summaryHTML += '<p><strong>Model Summary:</strong></p>';
-        summaryHTML += '<pre style="background: #f5f5f5; padding: 10px; overflow: auto;">';
-        
-        // Count parameters
-        let totalParams = 0;
-        model.layers.forEach(layer => {
-            const weights = layer.getWeights();
-            let layerParams = 0;
-            weights.forEach(w => {
-                layerParams += w.size;
-            });
-            totalParams += layerParams;
-            
-            summaryHTML += `${layer.name.padEnd(15)} ${layer.outputShape.toString().padEnd(20)} ${layerParams} params\n`;
-        });
-        
-        summaryHTML += `\nTotal params: ${totalParams}`;
-        summaryHTML += '</pre>';
-        
         document.getElementById('modelLayers').innerHTML = summaryHTML;
         
         updateStatus('modelStatus', 
-            `✅ Model created successfully! ${numFeatures} input features → 16 hidden units → 1 output. Total parameters: ${totalParams}`,
+            `✅ Model created! ${numFeatures} features → 16 hidden → 1 output`,
             'success'
         );
         
-        // Enable training and evaluation buttons
+        // Enable training
         document.getElementById('trainBtn').disabled = false;
         document.getElementById('summaryBtn').disabled = false;
         
-        console.log('Model created:', model);
-        console.log('Input shape:', [null, numFeatures]);
-        
     } catch (error) {
-        updateStatus('modelStatus', `❌ Model creation error: ${error.message}`, 'error');
-        console.error('Model creation error:', error);
+        updateStatus('modelStatus', `❌ Error: ${error.message}`, 'error');
     }
 }
 
 /**
- * Display model summary in tfjs-vis
+ * Show model summary
  */
 function showModelSummary() {
     if (!model) {
@@ -731,12 +610,12 @@ let isTraining = false;
 let stopTrainingRequested = false;
 
 /**
- * Train the model
+ * Train model
  */
 async function trainModel() {
     try {
         if (!model || !trainTensors) {
-            throw new Error('Please create model and preprocess data first');
+            throw new Error('Please create model first');
         }
         
         updateStatus('trainingStatus', 'Starting training...', 'normal');
@@ -745,11 +624,10 @@ async function trainModel() {
         isTraining = true;
         stopTrainingRequested = false;
         
-        // Enable/disable buttons
         document.getElementById('trainBtn').disabled = true;
         document.getElementById('stopTrainingBtn').disabled = false;
         
-        // Create validation split (80/20 stratified)
+        // Create validation split
         const indices = tf.range(0, trainTensors.features.shape[0]);
         const shuffled = tf.util.createShuffledIndices(indices.size);
         
@@ -757,18 +635,16 @@ async function trainModel() {
         const trainIndices = shuffled.slice(0, splitIdx);
         const valIndices = shuffled.slice(splitIdx);
         
-        // Extract training data
+        // Extract data
         const trainFeatures = tf.gather(trainTensors.features, trainIndices);
         const trainTargets = tf.gather(trainTensors.targets, trainIndices);
-        
-        // Extract validation data
         const valFeatures = tf.gather(trainTensors.features, valIndices);
         const valTargets = tf.gather(trainTensors.targets, valIndices);
         
-        // Store validation data for later evaluation
+        // Store validation data
         validationLabels = await valTargets.array();
         
-        // Prepare tfjs-vis callbacks
+        // Callbacks
         const metrics = ['loss', 'accuracy', 'val_loss', 'val_accuracy'];
         const container = {
             name: 'Training Metrics',
@@ -777,26 +653,22 @@ async function trainModel() {
         };
         
         const fitCallbacks = tfvis.show.fitCallbacks(container, metrics, {
-            callbacks: ['onBatchEnd', 'onEpochEnd'],
-            speed: 100
+            callbacks: ['onBatchEnd', 'onEpochEnd']
         });
         
-        // Add progress callback
+        // Progress callback
         const progressCallback = {
             onEpochEnd: (epoch, logs) => {
-                // Update progress bar
                 const progress = (epoch + 1) / 50 * 100;
                 document.getElementById('trainingProgress').style.width = `${progress}%`;
                 
-                // Check for early stopping
                 if (stopTrainingRequested) {
                     model.stopTraining = true;
-                    updateStatus('trainingStatus', 'Training stopped by user', 'warning');
                 }
             }
         };
         
-        // Train model
+        // Train
         const history = await model.fit(trainFeatures, trainTargets, {
             epochs: 50,
             batchSize: 32,
@@ -807,44 +679,41 @@ async function trainModel() {
         
         trainingHistory = history;
         
-        // Get validation predictions for ROC curve
+        // Get validation predictions
         validationProbs = await model.predict(valFeatures).array();
         
-        // Extract first layer weights for feature importance
+        // Get first layer weights
         const hiddenLayer = model.getLayer('hidden_layer');
         if (hiddenLayer) {
             const weights = hiddenLayer.getWeights();
             if (weights.length > 0) {
-                firstLayerWeights = weights[0]; // Weight matrix: [input_features, hidden_units]
-                console.log('First layer weights shape:', firstLayerWeights.shape);
+                firstLayerWeights = weights[0];
             }
         }
         
-        // Clean up tensors
+        // Clean up
         tf.dispose([trainFeatures, trainTargets, valFeatures, valTargets, indices]);
         
         if (stopTrainingRequested) {
-            updateStatus('trainingStatus', 'Training stopped early by user.', 'warning');
+            updateStatus('trainingStatus', 'Training stopped early', 'warning');
         } else {
+            const finalAcc = (history.history.acc[history.history.acc.length-1] * 100).toFixed(1);
+            const valAcc = (history.history.val_acc[history.history.val_acc.length-1] * 100).toFixed(1);
             updateStatus('trainingStatus', 
-                `✅ Training completed! Final accuracy: ${(history.history.acc[history.history.acc.length-1] * 100).toFixed(1)}%, ` +
-                `Validation accuracy: ${(history.history.val_acc[history.history.val_acc.length-1] * 100).toFixed(1)}%`,
+                `✅ Training complete! Accuracy: ${finalAcc}%, Val: ${valAcc}%`,
                 'success'
             );
         }
         
-        // Enable evaluation buttons
+        // Enable evaluation
         document.getElementById('evaluateBtn').disabled = false;
         document.getElementById('rocBtn').disabled = false;
         document.getElementById('thresholdSlider').disabled = false;
         document.getElementById('predictBtn').disabled = false;
         document.getElementById('saveModelBtn').disabled = false;
         
-        console.log('Training completed. History:', history);
-        
     } catch (error) {
-        updateStatus('trainingStatus', `❌ Training error: ${error.message}`, 'error');
-        console.error('Training error:', error);
+        updateStatus('trainingStatus', `❌ Error: ${error.message}`, 'error');
     } finally {
         isTraining = false;
         document.getElementById('trainBtn').disabled = false;
@@ -854,7 +723,7 @@ async function trainModel() {
 }
 
 /**
- * Stop training early
+ * Stop training
  */
 function stopTraining() {
     if (isTraining) {
@@ -868,23 +737,19 @@ function stopTraining() {
 // ============================================================================
 
 /**
- * Calculate ROC curve and AUC
- * @returns {Object} ROC curve data and AUC
+ * Calculate ROC
  */
 function calculateROC() {
-    if (!validationProbs || !validationLabels) {
-        throw new Error('No validation data available');
-    }
+    if (!validationProbs || !validationLabels) return;
     
-    // Sort by predicted probability
     const paired = validationProbs.map((prob, i) => ({
         prob: prob[0],
         label: validationLabels[i]
     })).sort((a, b) => b.prob - a.prob);
     
     const thresholds = Array.from({length: 101}, (_, i) => i / 100);
-    const tprs = []; // True Positive Rate (Recall)
-    const fprs = []; // False Positive Rate
+    const tprs = [];
+    const fprs = [];
     
     let area = 0;
     let prevFPR = 0;
@@ -910,7 +775,6 @@ function calculateROC() {
         tprs.push(tpr);
         fprs.push(fpr);
         
-        // Calculate AUC using trapezoidal rule
         if (fpr > prevFPR) {
             area += (fpr - prevFPR) * (tpr + prevTPR) / 2;
             prevFPR = fpr;
@@ -921,23 +785,21 @@ function calculateROC() {
     return {
         fpr: fprs,
         tpr: tprs,
-        thresholds: thresholds,
         auc: area.toFixed(4)
     };
 }
 
 /**
- * Show ROC curve using tfjs-vis
+ * Show ROC curve
  */
 function showROCCurve() {
     try {
         if (!validationProbs || !validationLabels) {
-            throw new Error('Please train the model first');
+            throw new Error('Please train model first');
         }
         
         const rocData = calculateROC();
         
-        // Format data for tfjs-vis
         const rocSeries = [{
             values: rocData.fpr.map((fpr, i) => ({x: fpr, y: rocData.tpr[i]})),
             series: 'ROC Curve'
@@ -953,30 +815,26 @@ function showROCCurve() {
             xLabel: 'False Positive Rate',
             yLabel: 'True Positive Rate',
             width: 400,
-            height: 300,
-            seriesColors: ['#3498db']
+            height: 300
         });
         
-        // Display AUC
         updateStatus('evaluationStatus', `ROC Curve displayed. AUC: ${rocData.auc}`, 'success');
         
     } catch (error) {
-        updateStatus('evaluationStatus', `❌ ROC curve error: ${error.message}`, 'error');
-        console.error('ROC curve error:', error);
+        updateStatus('evaluationStatus', `❌ Error: ${error.message}`, 'error');
     }
 }
 
 /**
- * Calculate confusion matrix and metrics for given threshold
- * @param {number} threshold - Classification threshold
+ * Evaluate model
  */
 function evaluateModel(threshold = 0.5) {
     try {
         if (!validationProbs || !validationLabels) {
-            throw new Error('Please train the model first');
+            throw new Error('Please train model first');
         }
         
-        // Update threshold display
+        // Update threshold
         document.getElementById('thresholdValue').textContent = threshold.toFixed(2);
         
         // Calculate confusion matrix
@@ -1024,33 +882,28 @@ function evaluateModel(threshold = 0.5) {
             ${confusionMatrixHTML}
         `;
         
-        // Display metrics table
+        // Display metrics
         const metricsTableHTML = `
             <table class="evaluation-table">
                 <tr>
                     <th>Metric</th>
                     <th>Value</th>
-                    <th>Description</th>
                 </tr>
                 <tr>
                     <td>Accuracy</td>
                     <td>${metrics.accuracy}</td>
-                    <td>(TP+TN) / Total</td>
                 </tr>
                 <tr>
                     <td>Precision</td>
                     <td>${metrics.precision}</td>
-                    <td>TP / (TP+FP)</td>
                 </tr>
                 <tr>
                     <td>Recall</td>
                     <td>${metrics.recall}</td>
-                    <td>TP / (TP+FN)</td>
                 </tr>
                 <tr>
                     <td>F1-Score</td>
                     <td>${metrics.f1}</td>
-                    <td>2 × (Precision×Recall) / (Precision+Recall)</td>
                 </tr>
             </table>
         `;
@@ -1060,83 +913,66 @@ function evaluateModel(threshold = 0.5) {
             ${metricsTableHTML}
         `;
         
-        // Calculate and display feature importance if weights are available
+        // Calculate feature importance
         if (firstLayerWeights && featureInfo) {
             calculateFeatureImportance();
         }
         
     } catch (error) {
-        updateStatus('evaluationStatus', `❌ Evaluation error: ${error.message}`, 'error');
-        console.error('Evaluation error:', error);
+        updateStatus('evaluationStatus', `❌ Error: ${error.message}`, 'error');
     }
 }
 
 /**
- * Calculate feature importance using Sigmoid Gate
+ * Calculate feature importance
  */
 async function calculateFeatureImportance() {
     try {
         if (!firstLayerWeights || !featureInfo || !trainTensors) {
-            throw new Error('Missing data for feature importance calculation');
+            return;
         }
         
-        // Get feature ranges from training data
+        // Get feature data
         const featureData = await trainTensors.features.array();
         const numFeatures = featureData[0].length;
         
-        // Calculate min and max for each feature
-        const featureMins = [];
-        const featureMaxs = [];
-        
+        // Calculate ranges
+        const featureRanges = [];
         for (let i = 0; i < numFeatures; i++) {
             const values = featureData.map(row => row[i]);
-            featureMins.push(Math.min(...values));
-            featureMaxs.push(Math.max(...values));
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+            featureRanges.push(max - min);
         }
         
-        // Calculate standardized feature range
-        const standardizedRanges = [];
-        for (let i = 0; i < numFeatures; i++) {
-            // Standardize the range difference
-            const range = featureMaxs[i] - featureMins[i];
-            // For binary features (0 or 1), range is 1
-            standardizedRanges.push(range > 1 ? 1 : range);
-        }
-        
-        // Get first layer weights
+        // Get weights
         const weights = await firstLayerWeights.array();
         
-        // Calculate importance: sigmoid(W * standardized_range)
+        // Calculate importance
         const importances = [];
-        
         for (let i = 0; i < numFeatures; i++) {
             let weightedSum = 0;
             
-            // Sum across all hidden units
             for (let j = 0; j < weights[i].length; j++) {
-                weightedSum += Math.abs(weights[i][j]) * standardizedRanges[i];
+                weightedSum += Math.abs(weights[i][j]) * (featureRanges[i] > 1 ? 1 : featureRanges[i]);
             }
             
-            // Apply sigmoid
             const importance = 1 / (1 + Math.exp(-weightedSum));
             importances.push({
                 feature: featureInfo.names[i] || `Feature_${i}`,
-                importance: importance,
-                rawScore: weightedSum
+                importance: importance
             });
         }
         
-        // Sort by importance
+        // Sort
         importances.sort((a, b) => b.importance - a.importance);
-        
-        // Store for later use
         featureImportance = importances;
         
-        // Display top 5 features
+        // Display top 5
         const topFeatures = importances.slice(0, 5);
         
         let importanceHTML = '<table class="evaluation-table">';
-        importanceHTML += '<tr><th>Rank</th><th>Feature</th><th>Importance</th><th>Visualization</th></tr>';
+        importanceHTML += '<tr><th>Rank</th><th>Feature</th><th>Importance</th><th>Bar</th></tr>';
         
         topFeatures.forEach((item, index) => {
             const percentage = (item.importance * 100).toFixed(1);
@@ -1158,15 +994,12 @@ async function calculateFeatureImportance() {
         });
         
         importanceHTML += '</table>';
-        
         document.getElementById('featureImportance').innerHTML = importanceHTML;
         
-        console.log('Top feature importances:', topFeatures);
-        
     } catch (error) {
-        console.error('Feature importance calculation error:', error);
+        console.error('Feature importance error:', error);
         document.getElementById('featureImportance').innerHTML = 
-            `<p style="color: #e74c3c;">Error calculating feature importance: ${error.message}</p>`;
+            `<p>Error calculating feature importance</p>`;
     }
 }
 
@@ -1175,26 +1008,26 @@ async function calculateFeatureImportance() {
 // ============================================================================
 
 /**
- * Generate predictions on test data
+ * Predict test data
  */
 async function predictTestData() {
     try {
         updateStatus('predictionStatus', 'Generating predictions...', 'normal');
         
         if (!model || !testTensors) {
-            throw new Error('Please train the model and load test data first');
+            throw new Error('Please train model first');
         }
         
         // Generate predictions
         const probsTensor = model.predict(testTensors.features);
         testProbabilities = await probsTensor.array();
         
-        // Convert to binary predictions with default threshold of 0.5
+        // Convert to binary
         const threshold = parseFloat(document.getElementById('thresholdValue').textContent);
         testPredictions = testProbabilities.map(prob => prob[0] >= threshold ? 1 : 0);
         testPassengerIds = testTensors.passengerIds;
         
-        // Clean up tensor
+        // Clean up
         tf.dispose(probsTensor);
         
         // Show preview
@@ -1215,30 +1048,23 @@ async function predictTestData() {
             10
         );
         
+        const survivalRate = (testPredictions.filter(p => p === 1).length / testPredictions.length * 100).toFixed(1);
         updateStatus('predictionStatus', 
-            `✅ Predictions generated! ${testPredictions.length} samples predicted. ` +
-            `Survival rate: ${(testPredictions.filter(p => p === 1).length / testPredictions.length * 100).toFixed(1)}%`,
+            `✅ Predictions generated! ${testPredictions.length} samples. Survival rate: ${survivalRate}%`,
             'success'
         );
         
-        // Enable export buttons
+        // Enable export
         document.getElementById('exportBtn').disabled = false;
         document.getElementById('exportProbsBtn').disabled = false;
         
-        console.log('Predictions generated. Sample:', {
-            passengerId: testPassengerIds[0],
-            prediction: testPredictions[0],
-            probability: testProbabilities[0][0]
-        });
-        
     } catch (error) {
-        updateStatus('predictionStatus', `❌ Prediction error: ${error.message}`, 'error');
-        console.error('Prediction error:', error);
+        updateStatus('predictionStatus', `❌ Error: ${error.message}`, 'error');
     }
 }
 
 /**
- * Export submission CSV
+ * Export submission
  */
 function exportSubmission() {
     try {
@@ -1252,13 +1078,12 @@ function exportSubmission() {
         updateStatus('predictionStatus', '✅ Submission CSV exported!', 'success');
         
     } catch (error) {
-        updateStatus('predictionStatus', `❌ Export error: ${error.message}`, 'error');
-        console.error('Export error:', error);
+        updateStatus('predictionStatus', `❌ Error: ${error.message}`, 'error');
     }
 }
 
 /**
- * Export probabilities CSV
+ * Export probabilities
  */
 function exportProbabilities() {
     try {
@@ -1272,13 +1097,12 @@ function exportProbabilities() {
         updateStatus('predictionStatus', '✅ Probabilities CSV exported!', 'success');
         
     } catch (error) {
-        updateStatus('predictionStatus', `❌ Export error: ${error.message}`, 'error');
-        console.error('Export error:', error);
+        updateStatus('predictionStatus', `❌ Error: ${error.message}`, 'error');
     }
 }
 
 /**
- * Save model to local downloads
+ * Save model
  */
 async function saveModel() {
     try {
@@ -1287,26 +1111,23 @@ async function saveModel() {
         }
         
         updateStatus('predictionStatus', 'Saving model...', 'normal');
-        
         await model.save('downloads://titanic-tfjs-model');
-        
-        updateStatus('predictionStatus', '✅ Model saved! Check your downloads folder.', 'success');
+        updateStatus('predictionStatus', '✅ Model saved!', 'success');
         
     } catch (error) {
-        updateStatus('predictionStatus', `❌ Model save error: ${error.message}`, 'error');
-        console.error('Model save error:', error);
+        updateStatus('predictionStatus', `❌ Error: ${error.message}`, 'error');
     }
 }
 
 // ============================================================================
-// EVENT LISTENERS & INITIALIZATION
+// INITIALIZATION
 // ============================================================================
 
 /**
- * Initialize the application
+ * Initialize app
  */
 function initializeApp() {
-    console.log('Titanic Binary Classifier initializing...');
+    console.log('App initializing...');
     
     // Set up event listeners
     document.getElementById('loadDataBtn').addEventListener('click', loadAndInspectData);
@@ -1326,22 +1147,21 @@ function initializeApp() {
     // Threshold slider
     const thresholdSlider = document.getElementById('thresholdSlider');
     thresholdSlider.addEventListener('input', function() {
-        const threshold = parseFloat(this.value);
-        evaluateModel(threshold);
+        evaluateModel(parseFloat(this.value));
     });
     
     // Initial status
-    updateStatus('dataStatus', 'Please upload train.csv and test.csv files', 'normal');
-    updateStatus('preprocessStatus', 'Load data first to enable preprocessing', 'normal');
-    updateStatus('modelStatus', 'Preprocess data first to create model', 'normal');
-    updateStatus('trainingStatus', 'Create model first to enable training', 'normal');
-    updateStatus('evaluationStatus', 'Train model first to enable evaluation', 'normal');
-    updateStatus('predictionStatus', 'Train model first to make predictions', 'normal');
+    updateStatus('dataStatus', 'Upload train.csv and test.csv files', 'normal');
+    updateStatus('preprocessStatus', 'Load data first', 'normal');
+    updateStatus('modelStatus', 'Preprocess data first', 'normal');
+    updateStatus('trainingStatus', 'Create model first', 'normal');
+    updateStatus('evaluationStatus', 'Train model first', 'normal');
+    updateStatus('predictionStatus', 'Train model first', 'normal');
     
-    console.log('App initialized. Ready to load Titanic data.');
+    console.log('App initialized');
 }
 
-// Initialize when page loads
+// Start app
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initializeApp);
 } else {
