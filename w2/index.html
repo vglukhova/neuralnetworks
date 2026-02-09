@@ -54,6 +54,15 @@
             min-width: 300px;
         }
         
+        input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            border: 2px dashed #3498db;
+            border-radius: 5px;
+            background-color: #f8f9fa;
+            margin-top: 5px;
+        }
+        
         button {
             background-color: #3498db;
             color: white;
@@ -133,6 +142,8 @@
             max-height: 300px;
             overflow-y: auto;
             margin-top: 10px;
+            border: 1px solid #ddd;
+            padding: 10px;
         }
         
         .slider-container {
@@ -211,6 +222,23 @@
             margin-top: 20px;
             font-size: 14px;
         }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -221,12 +249,12 @@
         <h2 class="section-title">1. Load Data</h2>
         <div class="file-input-group">
             <div class="file-input-container">
-                <label for="trainFile">Training Data (train.csv):</label>
+                <label for="trainFile"><strong>Training Data (train.csv):</strong></label>
                 <input type="file" id="trainFile" accept=".csv">
                 <div class="status" id="trainStatus">No file selected</div>
             </div>
             <div class="file-input-container">
-                <label for="testFile">Testing Data (test.csv):</label>
+                <label for="testFile"><strong>Testing Data (test.csv):</strong></label>
                 <input type="file" id="testFile" accept=".csv">
                 <div class="status" id="testStatus">No file selected</div>
             </div>
@@ -333,6 +361,7 @@
                 <li>Test the URL to ensure the app loads correctly</li>
             </ol>
             <p><strong>Note:</strong> This app runs entirely in the browser using TensorFlow.js. No server-side processing is required.</p>
+            <p><strong>Sample Data:</strong> You can download Titanic dataset from <a href="https://www.kaggle.com/c/titanic/data" target="_blank">Kaggle</a>.</p>
         </div>
     </section>
     
