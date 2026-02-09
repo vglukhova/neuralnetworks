@@ -3,152 +3,409 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Titanic Classifier - TensorFlow.js</title>
+    <title>Titanic Binary Classifier - TensorFlow.js</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-vis@latest"></script>
     <style>
-        /* RESET - Remove all problematic styling */
         * {
             box-sizing: border-box;
-            margin: 0;
-            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
         
         body {
-            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
             padding: 20px;
-            background: #f0f0f0;
+            background-color: #f5f7fa;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        h1, h2, h3 {
+            color: #2c3e50;
         }
         
         h1 {
             text-align: center;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
             margin-bottom: 30px;
-            color: #333;
         }
         
-        .section {
-            background: white;
+        .app-section {
+            background-color: white;
+            border-radius: 8px;
             padding: 20px;
-            margin-bottom: 20px;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 25px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-left: 5px solid #3498db;
         }
         
-        /* FILE INPUTS - ABSOLUTELY BASIC STYLING */
-        input[type="file"] {
+        .section-title {
+            display: flex;
+            align-items: center;
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: #2c3e50;
+        }
+        
+        .section-title::before {
+            content: "▶";
+            margin-right: 10px;
+            color: #3498db;
+        }
+        
+        .file-input-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .file-input-container {
+            flex: 1;
+            min-width: 200px;
+        }
+        
+        label {
             display: block;
-            margin: 10px 0;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #555;
+        }
+        
+        input[type="file"] {
+            width: 100%;
             padding: 10px;
-            border: 2px solid #4CAF50;
-            border-radius: 4px;
-            background: white;
-            cursor: pointer;
+            border: 2px dashed #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
         }
         
         button {
-            background: #4CAF50;
+            background-color: #3498db;
             color: white;
             border: none;
-            padding: 10px 20px;
-            border-radius: 4px;
+            padding: 12px 20px;
+            border-radius: 5px;
             cursor: pointer;
-            margin: 5px;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        
+        button:hover {
+            background-color: #2980b9;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         }
         
         button:disabled {
-            background: #cccccc;
+            background-color: #bdc3c7;
             cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .button-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 15px;
         }
         
         .status {
-            padding: 10px;
-            background: #e8f4e8;
-            border: 1px solid #4CAF50;
-            border-radius: 4px;
-            margin: 10px 0;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            background-color: #ecf0f1;
+            border-left: 5px solid #3498db;
+        }
+        
+        .status.success {
+            background-color: #d5f4e6;
+            border-left-color: #2ecc71;
+        }
+        
+        .status.error {
+            background-color: #fadbd8;
+            border-left-color: #e74c3c;
+        }
+        
+        .status.warning {
+            background-color: #fef5e7;
+            border-left-color: #f39c12;
+        }
+        
+        .preview-table {
+            width: 100%;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            margin: 15px 0;
+            display: block;
         }
         
         table {
             width: 100%;
             border-collapse: collapse;
-            margin: 10px 0;
         }
         
-        th, td {
+        .evaluation-table {
+            display: table !important;
+            visibility: visible !important;
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        
+        .evaluation-table td, .evaluation-table th {
             border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
+            padding: 12px;
+            text-align: center;
         }
         
-        th {
-            background: #4CAF50;
+        .evaluation-table th {
+            background-color: #3498db;
             color: white;
+            font-weight: bold;
+        }
+        
+        .evaluation-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        
+        .metrics-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        
+        .metrics-panel {
+            flex: 1;
+            min-width: 300px;
+        }
+        
+        .slider-container {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            height: 8px;
+            border-radius: 5px;
+            background: #ddd;
+            outline: none;
+        }
+        
+        .feature-importance-bar {
+            height: 20px;
+            background-color: #3498db;
+            border-radius: 3px;
+            margin: 5px 0;
+            transition: width 0.5s;
+        }
+        
+        .progress-container {
+            margin: 15px 0;
+        }
+        
+        .progress-bar {
+            height: 20px;
+            background-color: #3498db;
+            border-radius: 5px;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        
+        code {
+            background-color: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            color: #e74c3c;
+        }
+        
+        .note {
+            background-color: #fffde7;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 5px solid #f1c40f;
+            margin-top: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            .file-input-group, .button-group {
+                flex-direction: column;
+            }
+            
+            .metrics-container {
+                flex-direction: column;
+            }
         }
     </style>
 </head>
 <body>
-    <h1>🚢 Titanic Survival Classifier</h1>
+    <h1>🚢 Titanic Binary Classifier with TensorFlow.js</h1>
     
-    <!-- Section 1: File Upload - SIMPLIFIED -->
-    <div class="section">
-        <h2>1. Upload Data Files</h2>
-        <p><strong>Training Data (REQUIRED):</strong></p>
-        <input type="file" id="trainFile" accept=".csv">
-        <p id="trainStatus">No file selected</p>
+    <div class="app-section">
+        <h2 class="section-title">1. Data Loading</h2>
+        <p>Upload the Kaggle Titanic CSV files (train.csv and test.csv). The app will parse them in your browser.</p>
         
-        <p><strong>Test Data (Optional):</strong></p>
-        <input type="file" id="testFile" accept=".csv">
-        <p id="testStatus">No file selected</p>
+        <div class="file-input-group">
+            <div class="file-input-container">
+                <label for="trainFile">Training Data (train.csv)</label>
+                <input type="file" id="trainFile" accept=".csv">
+            </div>
+            <div class="file-input-container">
+                <label for="testFile">Test Data (test.csv)</label>
+                <input type="file" id="testFile" accept=".csv">
+            </div>
+        </div>
         
-        <button id="loadBtn">Load Files</button>
-        <div id="dataPreview"></div>
+        <button id="loadDataBtn">Load & Inspect Data</button>
+        
+        <div id="dataStatus" class="status"></div>
+        
+        <div id="dataPreview" style="display: none;">
+            <h3>Data Preview</h3>
+            <div class="preview-table" id="trainPreview"></div>
+            <div class="preview-table" id="testPreview"></div>
+        </div>
     </div>
     
-    <!-- Section 2: Preprocessing -->
-    <div class="section">
-        <h2>2. Preprocess Data</h2>
-        <button id="preprocessBtn" disabled>Preprocess</button>
-        <div id="preprocessStatus" class="status">Waiting for data...</div>
+    <div class="app-section">
+        <h2 class="section-title">2. Preprocessing</h2>
+        <p>Impute missing values (Age: median, Embarked: mode), standardize numeric features, one-hot encode categorical features.</p>
+        
+        <div class="button-group">
+            <button id="preprocessBtn" disabled>Preprocess Data</button>
+            <button id="toggleFeatureBtn" disabled>Toggle Family Features</button>
+        </div>
+        
+        <div id="preprocessStatus" class="status"></div>
+        
+        <div id="preprocessInfo" style="display: none;">
+            <h3>Preprocessing Details</h3>
+            <div id="featureInfo"></div>
+        </div>
     </div>
     
-    <!-- Section 3: Model -->
-    <div class="section">
-        <h2>3. Create Model</h2>
-        <button id="createModelBtn" disabled>Create Model</button>
-        <div id="modelStatus" class="status">Model not created yet</div>
+    <div class="app-section">
+        <h2 class="section-title">3. Model Configuration</h2>
+        <p>A shallow neural network with one hidden layer (16 units). The model will be trained entirely in your browser.</p>
+        
+        <div class="button-group">
+            <button id="createModelBtn" disabled>Create Model</button>
+            <button id="summaryBtn" disabled>Show Model Summary</button>
+        </div>
+        
+        <div id="modelStatus" class="status"></div>
+        
+        <div id="modelSummary" style="display: none;">
+            <h3>Model Architecture</h3>
+            <div id="modelLayers"></div>
+        </div>
     </div>
     
-    <!-- Section 4: Training -->
-    <div class="section">
-        <h2>4. Train Model</h2>
-        <button id="trainBtn" disabled>Train</button>
-        <div id="trainStatus" class="status">Not trained</div>
+    <div class="app-section">
+        <h2 class="section-title">4. Training</h2>
+        <p>Train the model with 80/20 stratified split. Early stopping will prevent overfitting.</p>
+        
+        <div class="progress-container">
+            <div class="progress-bar" id="trainingProgress"></div>
+        </div>
+        
+        <div class="button-group">
+            <button id="trainBtn" disabled>Train Model (50 epochs)</button>
+            <button id="stopTrainingBtn" disabled>Stop Training</button>
+        </div>
+        
+        <div id="trainingStatus" class="status"></div>
+        
+        <div id="trainingCharts" style="display: none;">
+            <h3>Training Metrics</h3>
+            <p>Loss and accuracy charts will appear here during training.</p>
+        </div>
     </div>
     
-    <!-- Section 5: Results -->
-    <div class="section">
-        <h2>5. Results</h2>
-        <button id="predictBtn" disabled>Predict</button>
-        <button id="exportBtn" disabled>Export</button>
-        <div id="results"></div>
+    <div class="app-section">
+        <h2 class="section-title">5. Evaluation & Feature Importance</h2>
+        <p>Evaluate model performance and compute feature importance using Sigmoid Gate mechanism.</p>
+        
+        <div class="button-group">
+            <button id="evaluateBtn" disabled>Evaluate Model</button>
+            <button id="rocBtn" disabled>Show ROC Curve</button>
+        </div>
+        
+        <div class="slider-container">
+            <div class="slider-label">
+                <span>Classification Threshold: <span id="thresholdValue">0.5</span></span>
+                <span>Adjust to see impact on metrics</span>
+            </div>
+            <input type="range" id="thresholdSlider" min="0" max="1" step="0.01" value="0.5" disabled>
+        </div>
+        
+        <div class="metrics-container">
+            <div class="metrics-panel">
+                <h3>Confusion Matrix & Metrics</h3>
+                <div id="confusionMatrix"></div>
+                <div id="metricsTable"></div>
+            </div>
+            
+            <div class="metrics-panel">
+                <h3>Top 5 Feature Importance (Sigmoid Gate)</h3>
+                <p>Importance = sigmoid(W * standardized_feature_range)</p>
+                <div id="featureImportance"></div>
+            </div>
+        </div>
+        
+        <div id="evaluationStatus" class="status"></div>
+    </div>
+    
+    <div class="app-section">
+        <h2 class="section-title">6. Prediction & Export</h2>
+        <p>Generate predictions on test data and export results for submission.</p>
+        
+        <div class="button-group">
+            <button id="predictBtn" disabled>Predict on Test Data</button>
+            <button id="exportBtn" disabled>Export Submission CSV</button>
+            <button id="exportProbsBtn" disabled>Export Probabilities CSV</button>
+            <button id="saveModelBtn" disabled>Save Model</button>
+        </div>
+        
+        <div id="predictionStatus" class="status"></div>
+        
+        <div id="predictionPreview" style="display: none;">
+            <h3>Prediction Preview</h3>
+            <div class="preview-table" id="submissionPreview"></div>
+        </div>
+    </div>
+    
+    <div class="note">
+        <h3>📋 Deployment Notes</h3>
+        <p>To deploy this app on GitHub Pages:</p>
+        <ol>
+            <li>Create a public GitHub repository</li>
+            <li>Commit <code>index.html</code> and <code>app.js</code> to the repository</li>
+            <li>Go to repository Settings → Pages → Source: select "main" branch, root folder</li>
+            <li>Click Save - your app will be available at <code>https://[username].github.io/[repository]/</code></li>
+            <li>Test the URL and ensure all CSV exports work correctly</li>
+        </ol>
+        <p><strong>CSV Compatibility:</strong> All exported CSV fields are double-quoted to prevent parsing issues in Excel/Google Sheets.</p>
     </div>
 
     <script src="app.js"></script>
-    
-    <!-- DEBUG: Test file input immediately -->
-    <script>
-        console.log("Page loaded successfully");
-        console.log("Train file input exists:", !!document.getElementById('trainFile'));
-        console.log("Test file input exists:", !!document.getElementById('testFile'));
-        
-        // Test if file inputs are clickable
-        document.getElementById('trainFile').addEventListener('click', function() {
-            console.log("Train file input clicked!");
-        });
-        
-        document.getElementById('testFile').addEventListener('click', function() {
-            console.log("Test file input clicked!");
-        });
-    </script>
 </body>
 </html>
