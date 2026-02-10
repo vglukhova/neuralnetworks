@@ -868,7 +868,7 @@ function calculateFeatureImportance() {
             return 1 / (1 + Math.exp(-score));
         });
         
-        // Normalize to percentages
+        // Normalize to percentages (0-100%)
         const total = sigmoidImportance.reduce((sum, val) => sum + val, 0);
         const normalizedImportance = sigmoidImportance.map(score => 
             total > 0 ? (score / total) * 100 : 0
@@ -890,18 +890,32 @@ function calculateFeatureImportance() {
         if (featureImportancePairs.length === 0) {
             html = '<p>No feature importance data available.</p>';
         } else {
+            html += '<div style="margin-top: 10px;">';
+            
             featureImportancePairs.forEach(pair => {
+                // Ensure minimum width for very small percentages
+                const displayWidth = Math.max(pair.importance, 2);
+                
                 html += '<div class="feature-bar">';
                 html += `<div class="feature-name">${pair.name}</div>`;
-                html += `<div class="feature-bar-value" style="width: ${pair.importance * 3}px;">${pair.importance.toFixed(1)}%</div>`;
+                html += '<div class="feature-bar-container">';
+                html += `<div class="feature-bar-value" style="width: ${displayWidth}%;">`;
+                html += `<span style="position: absolute; right: 5px; color: white; font-weight: bold; line-height: 24px;">${pair.importance.toFixed(1)}%</span>`;
+                html += '</div>';
+                html += '</div>';
+                html += `<div class="feature-percentage">${pair.importance.toFixed(1)}%</div>`;
                 html += '</div>';
             });
+            
+            html += '</div>';
         }
         
         container.innerHTML = html;
         
     } catch (error) {
         console.error('Error calculating feature importance:', error);
+        const container = document.getElementById('featureImportance');
+        container.innerHTML = `<p style="color: #721c24;">Error calculating feature importance: ${error.message}</p>`;
     }
 }
 
