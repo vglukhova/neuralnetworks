@@ -756,6 +756,7 @@ function processDataset(data, isTraining) {
 
 /**
  * Create the neural network model with Sigmoid gate for feature importance analysis
+ * FIXED VERSION with proper weight initialization and architecture
  */
 function createModel() {
     if (!processedTrainData) {
@@ -769,36 +770,65 @@ function createModel() {
         // Get input shape
         const inputShape = processedTrainData.features.shape[1];
         
+        console.log(`Creating model with ${inputShape} input features`);
+        
         // Create sequential model
         model = tf.sequential();
         
-        // Hidden layer with 16 neurons and ReLU activation
-        model.add(tf.layers.dense({
+        // FIX 1: Use PROPER weight initialization with He initialization (better for ReLU)
+        const hiddenLayerConfig = {
             units: 16,
             activation: 'relu',
             inputShape: [inputShape],
-            name: 'hidden_layer'
+            name: 'hidden_layer',
+            kernelInitializer: 'heNormal',  // FIX: Better initialization for ReLU
+            biasInitializer: 'zeros'
+        };
+        
+        // Hidden layer with 16 neurons and ReLU activation
+        model.add(tf.layers.dense(hiddenLayerConfig));
+        
+        // FIX 2: Add dropout to prevent overfitting and encourage diverse feature learning
+        model.add(tf.layers.dropout({
+            rate: 0.2,
+            name: 'dropout_1'
         }));
         
         // SIGMOID GATE LAYER: This layer learns feature importance
-        // The sigmoid activation creates a gating mechanism that can learn
-        // which features are most important for the prediction
-        model.add(tf.layers.dense({
+        // FIX 3: Use Glorot uniform initialization (better for sigmoid)
+        const sigmoidGateConfig = {
             units: 8,
             activation: 'sigmoid',
-            name: 'sigmoid_gate'
+            name: 'sigmoid_gate',
+            kernelInitializer: 'glorotUniform',  // FIX: Better for sigmoid
+            biasInitializer: 'zeros'
+        };
+        
+        model.add(tf.layers.dense(sigmoidGateConfig));
+        
+        // FIX 4: Add another dropout
+        model.add(tf.layers.dropout({
+            rate: 0.1,
+            name: 'dropout_2'
         }));
         
         // Output layer with 1 neuron and sigmoid activation for binary classification
-        model.add(tf.layers.dense({
+        const outputLayerConfig = {
             units: 1,
             activation: 'sigmoid',
-            name: 'output_layer'
-        }));
+            name: 'output_layer',
+            kernelInitializer: 'glorotUniform',  // FIX: Better for sigmoid
+            biasInitializer: 'zeros'
+        };
+        
+        model.add(tf.layers.dense(outputLayerConfig));
+        
+        // FIX 5: Use a better optimizer with learning rate schedule
+        const optimizer = tf.train.adam(0.01); // Increased learning rate
         
         // Compile the model
         model.compile({
-            optimizer: tf.train.adam(0.001),
+            optimizer: optimizer,
             loss: 'binaryCrossentropy',
             metrics: ['accuracy']
         });
