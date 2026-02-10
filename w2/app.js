@@ -89,22 +89,43 @@ function updateStatus(elementId, type, message) {
  * @returns {Array} Array of objects representing the CSV data
  */
 function parseCSV(csvText) {
-    const lines = csvText.split('\n').filter(line => line.trim() !== '');
+    // Remove Byte Order Mark (BOM) if present
+    if (csvText.charCodeAt(0) === 0xFEFF) {
+        csvText = csvText.slice(1);
+    }
+    
+    const lines = csvText.split('\n');
     if (lines.length === 0) {
         throw new Error('CSV file is empty');
     }
     
-    // Parse headers
-    const headers = parseCSVLine(lines[0]);
+    // Parse headers (first non-empty line)
+    let headerLine = '';
+    for (let i = 0; i < lines.length; i++) {
+        if (lines[i].trim() !== '') {
+            headerLine = lines[i];
+            lines.splice(0, i + 1);
+            break;
+        }
+    }
+    
+    if (!headerLine) {
+        throw new Error('No headers found in CSV');
+    }
+    
+    const headers = parseCSVLine(headerLine);
     
     // Parse data rows
     const data = [];
-    for (let i = 1; i < lines.length; i++) {
-        const values = parseCSVLine(lines[i]);
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line === '') continue;
+        
+        const values = parseCSVLine(line);
         
         // Skip rows with wrong number of values
         if (values.length !== headers.length) {
-            console.warn(`Skipping row ${i}: expected ${headers.length} columns, got ${values.length}`);
+            console.warn(`Skipping row ${i + 2}: expected ${headers.length} columns, got ${values.length}`);
             continue;
         }
         
@@ -113,12 +134,12 @@ function parseCSV(csvText) {
         for (let j = 0; j < headers.length; j++) {
             let value = values[j];
             
-            // Convert numeric values
-            if (!isNaN(value) && value !== '') {
+            // Convert numeric values (skip empty strings)
+            if (value !== '' && !isNaN(value) && value !== null) {
                 value = parseFloat(value);
             }
             
-            row[headers[j]] = value;
+            row[headers[j]] = value === '' ? null : value;
         }
         
         data.push(row);
@@ -142,8 +163,14 @@ function parseCSVLine(line) {
         const nextChar = line[i + 1] || '';
         
         if (char === '"') {
-            // Toggle quote mode
-            inQuotes = !inQuotes;
+            if (inQuotes && nextChar === '"') {
+                // Escaped quote inside quotes
+                currentValue += '"';
+                i++; // Skip next character
+            } else {
+                // Start or end of quoted field
+                inQuotes = !inQuotes;
+            }
         } else if (char === ',' && !inQuotes) {
             // End of current value
             values.push(currentValue);
@@ -158,7 +185,7 @@ function parseCSVLine(line) {
     values.push(currentValue);
     
     return values;
-}
+}    
 
 /**
  * Load CSV files from file inputs
@@ -174,6 +201,12 @@ async function loadCSVFiles() {
     
     try {
         updateStatus('dataStatus', 'info', 'Loading CSV files...');
+        
+        // Show loading indicator
+        const loadBtn = document.getElementById('loadDataBtn');
+        const originalText = loadBtn.innerHTML;
+        loadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+        loadBtn.disabled = true;
         
         // Load training data
         const trainFile = trainFileInput.files[0];
@@ -199,12 +232,20 @@ async function loadCSVFiles() {
         // Show survival distribution
         showSurvivalDistribution();
         
+        // Reset button
+        loadBtn.innerHTML = originalText;
+        loadBtn.disabled = false;
+        
     } catch (error) {
         console.error('Error loading CSV files:', error);
-        updateStatus('dataStatus', 'error', `Error loading CSV: ${error.message}`);
+        updateStatus('dataStatus', 'error', `Error loading CSV: ${error.message}. Make sure you're using the Titanic dataset format.`);
+        
+        // Reset button on error
+        const loadBtn = document.getElementById('loadDataBtn');
+        loadBtn.innerHTML = '<i class="fas fa-upload"></i> Load CSV Files';
+        loadBtn.disabled = false;
     }
 }
-
 /**
  * Load sample Titanic data (hardcoded subset for demo)
  */
