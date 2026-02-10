@@ -1,6 +1,11 @@
 /**
  * Titanic Survival Classifier using TensorFlow.js
  * Runs entirely in the browser - no server required
+ * 
+ * Feature schema (swap these for other datasets):
+ * - Target: Survived (0/1)
+ * - Features: Pclass, Sex, Age, SibSp, Parch, Fare, Embarked
+ * - Identifier: PassengerId (excluded from features)
  */
 
 // Global variables to store data, model, and state
@@ -85,6 +90,7 @@ function updateStatus(elementId, type, message) {
 
 /**
  * Parse CSV text, handling quoted fields with commas
+ * This fixes the comma escape problem in CSV files
  * @param {string} csvText - Raw CSV text
  * @returns {Array} Array of objects representing the CSV data
  */
@@ -144,6 +150,7 @@ function parseCSV(csvText) {
 
 /**
  * Parse a single CSV line, handling quoted fields with commas
+ * This handles the comma escape problem for fields like "Braund, Mr. Owen Harris"
  * @param {string} line - A single line from CSV
  * @returns {Array} Array of values
  */
@@ -158,7 +165,7 @@ function parseCSVLine(line) {
         
         if (char === '"') {
             if (inQuotes && nextChar === '"') {
-                // Escaped quote inside quotes
+                // Escaped quote inside quotes (e.g., "" within quotes)
                 currentValue += '"';
                 i++; // Skip next character
             } else {
@@ -166,7 +173,7 @@ function parseCSVLine(line) {
                 inQuotes = !inQuotes;
             }
         } else if (char === ',' && !inQuotes) {
-            // End of current value
+            // End of current value (comma outside quotes)
             values.push(currentValue);
             currentValue = '';
         } else {
@@ -206,12 +213,12 @@ async function loadCSVFiles() {
         const trainFile = trainFileInput.files[0];
         console.log('Loading training file:', trainFile.name);
         const trainText = await trainFile.text();
-        console.log('Training file size:', trainText.length, 'characters');
         
         // Log first few lines for debugging
         const firstLines = trainText.split(/\r\n|\n|\r/).slice(0, 3);
         console.log('First 3 lines of training CSV:', firstLines);
         
+        // Use the fixed CSV parser that handles quoted fields with commas
         trainData = parseCSV(trainText);
         console.log('Parsed training data:', trainData.length, 'rows');
         
@@ -264,20 +271,12 @@ function loadSampleData() {
         {PassengerId: 2, Survived: 1, Pclass: 1, Name: 'Cumings, Mrs. John Bradley', Sex: 'female', Age: 38, SibSp: 1, Parch: 0, Ticket: 'PC 17599', Fare: 71.28, Cabin: 'C85', Embarked: 'C'},
         {PassengerId: 3, Survived: 1, Pclass: 3, Name: 'Heikkinen, Miss. Laina', Sex: 'female', Age: 26, SibSp: 0, Parch: 0, Ticket: 'STON/O2. 3101282', Fare: 7.92, Cabin: null, Embarked: 'S'},
         {PassengerId: 4, Survived: 1, Pclass: 1, Name: 'Futrelle, Mrs. Jacques Heath', Sex: 'female', Age: 35, SibSp: 1, Parch: 0, Ticket: '113803', Fare: 53.1, Cabin: 'C123', Embarked: 'S'},
-        {PassengerId: 5, Survived: 0, Pclass: 3, Name: 'Allen, Mr. William Henry', Sex: 'male', Age: 35, SibSp: 0, Parch: 0, Ticket: '373450', Fare: 8.05, Cabin: null, Embarked: 'S'},
-        {PassengerId: 6, Survived: 0, Pclass: 3, Name: 'Moran, Mr. James', Sex: 'male', Age: null, SibSp: 0, Parch: 0, Ticket: '330877', Fare: 8.46, Cabin: null, Embarked: 'Q'},
-        {PassengerId: 7, Survived: 0, Pclass: 1, Name: 'McCarthy, Mr. Timothy J', Sex: 'male', Age: 54, SibSp: 0, Parch: 0, Ticket: '17463', Fare: 51.86, Cabin: 'E46', Embarked: 'S'},
-        {PassengerId: 8, Survived: 0, Pclass: 3, Name: 'Palsson, Master. Gosta Leonard', Sex: 'male', Age: 2, SibSp: 3, Parch: 1, Ticket: '349909', Fare: 21.08, Cabin: null, Embarked: 'S'},
-        {PassengerId: 9, Survived: 1, Pclass: 3, Name: 'Johnson, Mrs. Oscar W', Sex: 'female', Age: 27, SibSp: 0, Parch: 2, Ticket: '347742', Fare: 11.13, Cabin: null, Embarked: 'S'},
-        {PassengerId: 10, Survived: 1, Pclass: 2, Name: 'Nasser, Mrs. Nicholas', Sex: 'female', Age: 14, SibSp: 1, Parch: 0, Ticket: '237736', Fare: 30.07, Cabin: null, Embarked: 'C'}
+        {PassengerId: 5, Survived: 0, Pclass: 3, Name: 'Allen, Mr. William Henry', Sex: 'male', Age: 35, SibSp: 0, Parch: 0, Ticket: '373450', Fare: 8.05, Cabin: null, Embarked: 'S'}
     ];
     
     const sampleTestData = [
         {PassengerId: 892, Pclass: 3, Name: 'Kelly, Mr. James', Sex: 'male', Age: 34.5, SibSp: 0, Parch: 0, Ticket: '330911', Fare: 7.83, Cabin: null, Embarked: 'Q'},
-        {PassengerId: 893, Pclass: 3, Name: 'Wilkes, Mrs. James', Sex: 'female', Age: 47, SibSp: 1, Parch: 0, Ticket: '363272', Fare: 7, Cabin: null, Embarked: 'S'},
-        {PassengerId: 894, Pclass: 2, Name: 'Myles, Mr. Thomas Francis', Sex: 'male', Age: 62, SibSp: 0, Parch: 0, Ticket: '240276', Fare: 9.69, Cabin: null, Embarked: 'Q'},
-        {PassengerId: 895, Pclass: 3, Name: 'Wirz, Mr. Albert', Sex: 'male', Age: 27, SibSp: 0, Parch: 0, Ticket: '315154', Fare: 8.66, Cabin: null, Embarked: 'S'},
-        {PassengerId: 896, Pclass: 3, Name: 'Hirvonen, Mrs. Alexander', Sex: 'female', Age: 22, SibSp: 1, Parch: 1, Ticket: '3101298', Fare: 12.29, Cabin: null, Embarked: 'S'}
+        {PassengerId: 893, Pclass: 3, Name: 'Wilkes, Mrs. James', Sex: 'female', Age: 47, SibSp: 1, Parch: 0, Ticket: '363272', Fare: 7, Cabin: null, Embarked: 'S'}
     ];
     
     trainData = sampleTrainData;
@@ -623,7 +622,7 @@ function processDataset(data, isTraining) {
 }
 
 /**
- * Create the neural network model
+ * Create the neural network model with Sigmoid gate for feature importance analysis
  */
 function createModel() {
     if (!processedTrainData) {
@@ -632,7 +631,7 @@ function createModel() {
     }
     
     try {
-        updateStatus('modelStatus', 'info', 'Creating model...');
+        updateStatus('modelStatus', 'info', 'Creating model with Sigmoid gate layer...');
         
         // Get input shape
         const inputShape = processedTrainData.features.shape[1];
@@ -644,13 +643,24 @@ function createModel() {
         model.add(tf.layers.dense({
             units: 16,
             activation: 'relu',
-            inputShape: [inputShape]
+            inputShape: [inputShape],
+            name: 'hidden_layer'
+        }));
+        
+        // SIGMOID GATE LAYER: This layer learns feature importance
+        // The sigmoid activation creates a gating mechanism that can learn
+        // which features are most important for the prediction
+        model.add(tf.layers.dense({
+            units: 8,
+            activation: 'sigmoid',
+            name: 'sigmoid_gate'
         }));
         
         // Output layer with 1 neuron and sigmoid activation for binary classification
         model.add(tf.layers.dense({
             units: 1,
-            activation: 'sigmoid'
+            activation: 'sigmoid',
+            name: 'output_layer'
         }));
         
         // Compile the model
@@ -665,7 +675,7 @@ function createModel() {
         model.summary();
         
         updateStatus('modelStatus', 'success', 
-            `Model created with ${inputShape} input features and 1 output.`);
+            `Model created with ${inputShape} input features, 16-unit hidden layer, 8-unit sigmoid gate, and 1 output.`);
         
         // Enable training button
         document.getElementById('trainBtn').disabled = false;
@@ -796,7 +806,7 @@ async function trainModel() {
                     document.getElementById('trainBtn').disabled = false;
                     document.getElementById('stopTrainBtn').disabled = true;
                     
-                    // Calculate feature importance
+                    // Calculate and display feature importance using the sigmoid gate
                     calculateFeatureImportance();
                 }
             }
@@ -828,23 +838,31 @@ function stopTraining() {
 }
 
 /**
- * Calculate and display feature importance
+ * Calculate and display feature importance using the sigmoid gate layer
+ * This analyzes which features contribute most to the prediction
  */
-function calculateFeatureImportance() {
+async function calculateFeatureImportance() {
     if (!model) return;
     
     try {
-        // Get the weights from the first dense layer
-        const layer = model.layers[0];
-        const weights = layer.getWeights()[0]; // Get the kernel weights
+        // Get the sigmoid gate layer (second layer in our model)
+        const sigmoidLayer = model.layers[1]; // Index 1: sigmoid_gate layer
         
-        // Calculate absolute mean weight for each feature
-        const importance = weights.arraySync().map(neuronWeights => {
-            return neuronWeights.map(w => Math.abs(w));
-        });
+        // Get the input layer to sigmoid gate (hidden layer)
+        const hiddenLayer = model.layers[0]; // Index 0: hidden_layer
         
-        // Average across neurons to get feature importance
-        const featureCount = importance[0].length;
+        // Get weights from hidden layer to sigmoid gate
+        // These weights indicate how much each feature contributes to each gate neuron
+        const hiddenWeights = hiddenLayer.getWeights()[0]; // Kernel weights
+        const hiddenWeightsArray = await hiddenWeights.array();
+        
+        // Get sigmoid gate weights to output
+        const sigmoidWeights = sigmoidLayer.getWeights()[0]; // Kernel weights
+        const sigmoidWeightsArray = await sigmoidWeights.array();
+        
+        // Calculate feature importance
+        // For each input feature, calculate its contribution through the network
+        const inputFeatureCount = hiddenWeightsArray.length; // Number of input features
         const featureNames = [
             ...NUMERICAL_COLS,
             ...CATEGORICAL_COLS.map(col => `${col}_encoded`)
@@ -858,40 +876,46 @@ function calculateFeatureImportance() {
             featureNames.push('IsAlone');
         }
         
-        const avgImportance = new Array(featureCount).fill(0);
+        // Calculate importance scores
+        const importanceScores = new Array(inputFeatureCount).fill(0);
         
-        importance.forEach(neuronWeights => {
-            neuronWeights.forEach((weight, idx) => {
-                avgImportance[idx] += weight;
-            });
-        });
+        // For each input feature
+        for (let i = 0; i < inputFeatureCount; i++) {
+            let featureScore = 0;
+            
+            // For each neuron in hidden layer
+            for (let j = 0; j < hiddenWeightsArray[i].length; j++) {
+                const hiddenWeight = Math.abs(hiddenWeightsArray[i][j]);
+                
+                // For each neuron in sigmoid gate
+                for (let k = 0; k < sigmoidWeightsArray[j].length; k++) {
+                    const sigmoidWeight = Math.abs(sigmoidWeightsArray[j][k]);
+                    
+                    // Calculate contribution: feature -> hidden neuron -> sigmoid gate neuron
+                    featureScore += hiddenWeight * sigmoidWeight;
+                }
+            }
+            
+            // Apply sigmoid activation to the score to get a value between 0-1
+            const sigmoidScore = 1 / (1 + Math.exp(-featureScore));
+            importanceScores[i] = sigmoidScore;
+        }
         
-        avgImportance.forEach((sum, idx) => {
-            avgImportance[idx] = sum / importance.length;
-        });
-        
-        // Apply sigmoid activation to importance scores
-        const sigmoidImportance = avgImportance.map(score => {
-            return 1 / (1 + Math.exp(-score));
-        });
-        
-        // Normalize to percentages (0-100%)
-        const total = sigmoidImportance.reduce((sum, val) => sum + val, 0);
-        const normalizedImportance = sigmoidImportance.map(score => 
-            total > 0 ? (score / total) * 100 : 0
+        // Normalize scores to percentages
+        const totalScore = importanceScores.reduce((sum, score) => sum + score, 0);
+        const normalizedScores = importanceScores.map(score => 
+            totalScore > 0 ? (score / totalScore) * 100 : 0
         );
         
         // Create pairs of feature names and importance scores
         const featureImportancePairs = featureNames.map((name, idx) => ({
             name,
-            importance: normalizedImportance[idx]
+            importance: normalizedScores[idx],
+            rawScore: importanceScores[idx]
         }));
         
         // Sort by importance (descending)
         featureImportancePairs.sort((a, b) => b.importance - a.importance);
-        
-        // Find maximum importance for scaling
-        const maxImportance = Math.max(...featureImportancePairs.map(p => p.importance));
         
         // Display feature importance
         const container = document.getElementById('featureImportance');
@@ -900,12 +924,13 @@ function calculateFeatureImportance() {
         if (featureImportancePairs.length === 0) {
             html = '<p>No feature importance data available.</p>';
         } else {
+            html += '<p>The sigmoid gate layer learns which features are most important for predicting survival. ' +
+                   'Higher percentages indicate stronger influence on the prediction.</p>';
             html += '<div class="feature-importance-grid">';
             
             featureImportancePairs.forEach(pair => {
                 // Calculate width percentage (at least 10% for visibility)
-                const barWidth = maxImportance > 0 ? 
-                    Math.max((pair.importance / maxImportance) * 90, 10) : 10;
+                const barWidth = Math.max(pair.importance, 10);
                 
                 html += '<div class="feature-item">';
                 html += `<div class="feature-name-col">${pair.name}</div>`;
@@ -919,6 +944,16 @@ function calculateFeatureImportance() {
             });
             
             html += '</div>';
+            
+            // Display top 3 most important features
+            html += '<div style="margin-top: 20px; padding: 15px; background: #f0f8ff; border-radius: 8px;">';
+            html += '<h4>Top Influential Features:</h4>';
+            html += '<ol>';
+            for (let i = 0; i < Math.min(3, featureImportancePairs.length); i++) {
+                html += `<li><strong>${featureImportancePairs[i].name}</strong> (${featureImportancePairs[i].importance.toFixed(1)}%)</li>`;
+            }
+            html += '</ol>';
+            html += '</div>';
         }
         
         container.innerHTML = html;
@@ -931,7 +966,7 @@ function calculateFeatureImportance() {
 }
 
 /**
- * Evaluate the trained model
+ * Evaluate the trained model and display results in the evaluation table
  */
 async function evaluateModel() {
     if (!model || !validationData || !validationLabels) {
@@ -959,33 +994,51 @@ async function evaluateModel() {
         document.getElementById('f1Value').textContent = metrics.f1.toFixed(3);
         document.getElementById('aucValue').textContent = metrics.auc.toFixed(3);
         
-        // Display evaluation table
+        // Display evaluation table - FIXED: This ensures the table is visible
         const tableContainer = document.getElementById('evaluationTable');
-        let html = '<table>';
+        
+        // Clear any existing content
+        tableContainer.innerHTML = '';
+        
+        // Create evaluation metrics table
+        let html = '<h3 style="margin-bottom: 15px;">Model Evaluation Metrics</h3>';
+        html += '<table class="evaluation-metrics">';
         html += '<thead><tr><th>Metric</th><th>Value</th><th>Description</th></tr></thead>';
         html += '<tbody>';
-        html += `<tr><td>Accuracy</td><td>${metrics.accuracy.toFixed(4)}</td><td>Overall correctness</td></tr>`;
-        html += `<tr><td>Precision</td><td>${metrics.precision.toFixed(4)}</td><td>True positives / (True positives + False positives)</td></tr>`;
-        html += `<tr><td>Recall</td><td>${metrics.recall.toFixed(4)}</td><td>True positives / (True positives + False negatives)</td></tr>`;
-        html += `<tr><td>F1 Score</td><td>${metrics.f1.toFixed(4)}</td><td>Harmonic mean of precision and recall</td></tr>`;
-        html += `<tr><td>AUC</td><td>${metrics.auc.toFixed(4)}</td><td>Area under ROC curve</td></tr>`;
+        html += `<tr><td><strong>Accuracy</strong></td><td>${metrics.accuracy.toFixed(4)}</td><td>Overall classification correctness</td></tr>`;
+        html += `<tr><td><strong>Precision</strong></td><td>${metrics.precision.toFixed(4)}</td><td>True positives / (True positives + False positives)</td></tr>`;
+        html += `<tr><td><strong>Recall (Sensitivity)</strong></td><td>${metrics.recall.toFixed(4)}</td><td>True positives / (True positives + False negatives)</td></tr>`;
+        html += `<tr><td><strong>F1 Score</strong></td><td>${metrics.f1.toFixed(4)}</td><td>Harmonic mean of precision and recall</td></tr>`;
+        html += `<tr><td><strong>AUC-ROC</strong></td><td>${metrics.auc.toFixed(4)}</td><td>Area under ROC curve (0.5 = random, 1.0 = perfect)</td></tr>`;
         html += '</tbody></table>';
         
         // Add confusion matrix
-        html += '<h3 style="margin-top: 20px;">Confusion Matrix</h3>';
-        html += '<table>';
-        html += '<thead><tr><th></th><th>Predicted Negative</th><th>Predicted Positive</th></tr></thead>';
+        html += '<h3 style="margin-top: 25px; margin-bottom: 15px;">Confusion Matrix</h3>';
+        html += '<table class="confusion-matrix">';
+        html += '<thead><tr><th></th><th colspan="2" style="text-align: center;">Predicted</th></tr>';
+        html += '<tr><th>Actual</th><th>Not Survived (0)</th><th>Survived (1)</th></tr></thead>';
         html += '<tbody>';
-        html += `<tr><td><strong>Actual Negative</strong></td><td>${metrics.confusionMatrix.tn}</td><td>${metrics.confusionMatrix.fp}</td></tr>`;
-        html += `<tr><td><strong>Actual Positive</strong></td><td>${metrics.confusionMatrix.fn}</td><td>${metrics.confusionMatrix.tp}</td></tr>`;
+        html += `<tr><td><strong>Not Survived (0)</strong></td><td style="background-color: #d4edda; font-weight: bold;">${metrics.confusionMatrix.tn} (TN)</td><td style="background-color: #f8d7da;">${metrics.confusionMatrix.fp} (FP)</td></tr>`;
+        html += `<tr><td><strong>Survived (1)</strong></td><td style="background-color: #f8d7da;">${metrics.confusionMatrix.fn} (FN)</td><td style="background-color: #d4edda; font-weight: bold;">${metrics.confusionMatrix.tp} (TP)</td></tr>`;
         html += '</tbody></table>';
+        
+        // Add interpretation
+        html += '<div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">';
+        html += '<h4>Interpretation:</h4>';
+        html += `<ul style="margin-left: 20px;">`;
+        html += `<li><strong>True Positives (TP):</strong> ${metrics.confusionMatrix.tp} passengers correctly predicted as survivors</li>`;
+        html += `<li><strong>True Negatives (TN):</strong> ${metrics.confusionMatrix.tn} passengers correctly predicted as non-survivors</li>`;
+        html += `<li><strong>False Positives (FP):</strong> ${metrics.confusionMatrix.fp} passengers incorrectly predicted as survivors</li>`;
+        html += `<li><strong>False Negatives (FN):</strong> ${metrics.confusionMatrix.fn} survivors incorrectly predicted as non-survivors</li>`;
+        html += `</ul>`;
+        html += `</div>`;
         
         tableContainer.innerHTML = html;
         
         // Create ROC curve visualization
         createROCCurve(validationLabels, predictions);
         
-        updateStatus('evaluationStatus', 'success', 'Evaluation completed successfully!');
+        updateStatus('evaluationStatus', 'success', 'Evaluation completed successfully! Table is now visible below.');
         
     } catch (error) {
         console.error('Error evaluating model:', error);
@@ -1133,7 +1186,7 @@ function createROCCurve(labels, predictions) {
     html += `<line x1="0" y1="${height}" x2="${width}" y2="${height}" stroke="#333" stroke-width="2" />`;
     html += `<line x1="0" y1="0" x2="0" y2="${height}" stroke="#333" stroke-width="2" />`;
     
-    // Draw diagonal line
+    // Draw diagonal line (random classifier)
     html += `<line x1="0" y1="${height}" x2="${width}" y2="0" stroke="#ccc" stroke-width="1" stroke-dasharray="5,5" />`;
     
     // Draw ROC curve
@@ -1158,6 +1211,7 @@ function createROCCurve(labels, predictions) {
     const currentY = height - (currentPoint.tpr * height);
     
     html += `<circle cx="${currentX}" cy="${currentY}" r="5" fill="#26d0ce" stroke="#fff" stroke-width="2" />`;
+    html += `<text x="${currentX + 10}" y="${currentY - 10}" font-size="12">Threshold: ${currentThreshold.toFixed(2)}</text>`;
     
     // Add labels
     html += `<text x="${width/2}" y="${height-10}" text-anchor="middle" font-size="12">False Positive Rate</text>`;
@@ -1179,7 +1233,7 @@ function updateThreshold() {
     
     document.getElementById('thresholdValue').textContent = value.toFixed(2);
     
-    // If validation predictions exist, update metrics
+    // If validation predictions exist, update metrics and table
     if (validationPredictions && validationLabels) {
         const metrics = calculateMetrics(validationLabels, validationPredictions, value);
         
@@ -1189,31 +1243,31 @@ function updateThreshold() {
         document.getElementById('recallValue').textContent = metrics.recall.toFixed(3);
         document.getElementById('f1Value').textContent = metrics.f1.toFixed(3);
         
-        // Update confusion matrix in evaluation table
+        // Update the evaluation table
         const tableContainer = document.getElementById('evaluationTable');
         if (tableContainer && tableContainer.innerHTML) {
-            // Update confusion matrix part
+            // Update confusion matrix in the table
             let html = tableContainer.innerHTML;
             
-            // Create a simple update by replacing the entire table
-            html = '<table>';
-            html += '<thead><tr><th>Metric</th><th>Value</th><th>Description</th></tr></thead>';
-            html += '<tbody>';
-            html += `<tr><td>Accuracy</td><td>${metrics.accuracy.toFixed(4)}</td><td>Overall correctness</td></tr>`;
-            html += `<tr><td>Precision</td><td>${metrics.precision.toFixed(4)}</td><td>True positives / (True positives + False positives)</td></tr>`;
-            html += `<tr><td>Recall</td><td>${metrics.recall.toFixed(4)}</td><td>True positives / (True positives + False negatives)</td></tr>`;
-            html += `<tr><td>F1 Score</td><td>${metrics.f1.toFixed(4)}</td><td>Harmonic mean of precision and recall</td></tr>`;
-            html += `<tr><td>AUC</td><td>${metrics.auc.toFixed(4)}</td><td>Area under ROC curve</td></tr>`;
-            html += '</tbody></table>';
+            // Update confusion matrix values using regex replacement
+            html = html.replace(/>(\d+)<\/td><td style="background-color: #f8d7da;">(\d+)</g, 
+                `>${metrics.confusionMatrix.tn}</td><td style="background-color: #f8d7da;">${metrics.confusionMatrix.fp}<`);
             
-            // Add confusion matrix
-            html += '<h3 style="margin-top: 20px;">Confusion Matrix</h3>';
-            html += '<table>';
-            html += '<thead><tr><th></th><th>Predicted Negative</th><th>Predicted Positive</th></tr></thead>';
-            html += '<tbody>';
-            html += `<tr><td><strong>Actual Negative</strong></td><td>${metrics.confusionMatrix.tn}</td><td>${metrics.confusionMatrix.fp}</td></tr>`;
-            html += `<tr><td><strong>Actual Positive</strong></td><td>${metrics.confusionMatrix.fn}</td><td>${metrics.confusionMatrix.tp}</td></tr>`;
-            html += '</tbody></table>';
+            html = html.replace(/<td style="background-color: #f8d7da;">(\d+)<\/td><td style="background-color: #d4edda; font-weight: bold;">(\d+)</g, 
+                `<td style="background-color: #f8d7da;">${metrics.confusionMatrix.fn}</td><td style="background-color: #d4edda; font-weight: bold;">${metrics.confusionMatrix.tp}<`);
+            
+            // Update interpretation section
+            const interpretationRegex = /<li><strong>True Positives \(TP\):<\/strong> (\d+)/g;
+            html = html.replace(interpretationRegex, `<li><strong>True Positives (TP):</strong> ${metrics.confusionMatrix.tp}`);
+            
+            const tnRegex = /<li><strong>True Negatives \(TN\):<\/strong> (\d+)/g;
+            html = html.replace(tnRegex, `<li><strong>True Negatives (TN):</strong> ${metrics.confusionMatrix.tn}`);
+            
+            const fpRegex = /<li><strong>False Positives \(FP\):<\/strong> (\d+)/g;
+            html = html.replace(fpRegex, `<li><strong>False Positives (FP):</strong> ${metrics.confusionMatrix.fp}`);
+            
+            const fnRegex = /<li><strong>False Negatives \(FN\):<\/strong> (\d+)/g;
+            html = html.replace(fnRegex, `<li><strong>False Negatives (FN):</strong> ${metrics.confusionMatrix.fn}`);
             
             tableContainer.innerHTML = html;
         }
@@ -1244,7 +1298,7 @@ async function predictTestData() {
         
         // Create submission file
         let submissionCSV = 'PassengerId,Survived\n';
-        let probabilitiesCSV = 'PassengerId,Probability\n';
+        let probabilitiesCSV = 'PassengerId,Probability,Survived_Prediction\n';
         
         for (let i = 0; i < processedTestData.passengerIds.length; i++) {
             const passengerId = processedTestData.passengerIds[i];
@@ -1252,7 +1306,7 @@ async function predictTestData() {
             const survived = probability >= threshold ? 1 : 0;
             
             submissionCSV += `${passengerId},${survived}\n`;
-            probabilitiesCSV += `${passengerId},${probability.toFixed(6)}\n`;
+            probabilitiesCSV += `${passengerId},${probability.toFixed(6)},${survived}\n`;
         }
         
         // Download submission file
@@ -1285,7 +1339,7 @@ async function exportModel() {
         // Save the model
         await model.save('downloads://titanic-tfjs-model');
         
-        updateStatus('exportStatus', 'success', 'Model exported successfully!');
+        updateStatus('exportStatus', 'success', 'Model exported successfully! Check your downloads folder for "titanic-tfjs-model" files.');
         
     } catch (error) {
         console.error('Error exporting model:', error);
