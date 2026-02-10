@@ -974,24 +974,9 @@ async function calculateFeatureImportance() {
     if (!model) return;
     
     try {
-        // Get the sigmoid gate layer (second layer in our model)
-        const sigmoidLayer = model.layers[1]; // Index 1: sigmoid_gate layer
+        updateStatus('featureImportance', 'info', 'Calculating feature importance...');
         
-        // Get the input layer to sigmoid gate (hidden layer)
-        const hiddenLayer = model.layers[0]; // Index 0: hidden_layer
-        
-        // Get weights from hidden layer to sigmoid gate
-        // These weights indicate how much each feature contributes to each gate neuron
-        const hiddenWeights = hiddenLayer.getWeights()[0]; // Kernel weights
-        const hiddenWeightsArray = await hiddenWeights.array();
-        
-        // Get sigmoid gate weights to output
-        const sigmoidWeights = sigmoidLayer.getWeights()[0]; // Kernel weights
-        const sigmoidWeightsArray = await sigmoidWeights.array();
-        
-        // Calculate feature importance
-        // For each input feature, calculate its contribution through the network
-        const inputFeatureCount = hiddenWeightsArray.length; // Number of input features
+        // Get feature names
         const featureNames = [
             ...NUMERICAL_COLS,
             ...CATEGORICAL_COLS.map(col => `${col}_encoded`)
@@ -1005,92 +990,271 @@ async function calculateFeatureImportance() {
             featureNames.push('IsAlone');
         }
         
-        // Calculate importance scores
-        const importanceScores = new Array(inputFeatureCount).fill(0);
+        // Method 1: Get weights from the first hidden layer (16 neurons)
+        const hiddenLayer = model.layers[0]; // First dense layer
+        const hiddenWeights = hiddenLayer.getWeights()[0]; // Input to hidden weights
+        const hiddenWeightsArray = await hiddenWeights.array();
+        
+        // Calculate importance as mean absolute weight for each input feature
+        const featureImportance = [];
         
         // For each input feature
-        for (let i = 0; i < inputFeatureCount; i++) {
-            let featureScore = 0;
+        for (let i = 0; i < featureNames.length; i++) {
+            let totalWeight = 0;
             
-            // For each neuron in hidden layer
+            // Sum absolute weights across all neurons in the hidden layer
             for (let j = 0; j < hiddenWeightsArray[i].length; j++) {
-                const hiddenWeight = Math.abs(hiddenWeightsArray[i][j]);
-                
-                // For each neuron in sigmoid gate
-                for (let k = 0; k < sigmoidWeightsArray[j].length; k++) {
-                    const sigmoidWeight = Math.abs(sigmoidWeightsArray[j][k]);
-                    
-                    // Calculate contribution: feature -> hidden neuron -> sigmoid gate neuron
-                    featureScore += hiddenWeight * sigmoidWeight;
-                }
+                totalWeight += Math.abs(hiddenWeightsArray[i][j]);
             }
             
-            // Apply sigmoid activation to the score to get a value between 0-1
-            const sigmoidScore = 1 / (1 + Math.exp(-featureScore));
-            importanceScores[i] = sigmoidScore;
+            // Average across neurons
+            const avgWeight = totalWeight / hiddenWeightsArray[i].length;
+            
+            // Store raw importance score
+            featureImportance.push({
+                name: featureNames[i],
+                rawScore: avgWeight,
+                importance: avgWeight // Will normalize later
+            });
         }
         
-        // Normalize scores to percentages
-        const totalScore = importanceScores.reduce((sum, score) => sum + score, 0);
-        const normalizedScores = importanceScores.map(score => 
-            totalScore > 0 ? (score / totalScore) * 100 : 0
-        );
+        // Normalize to percentages (0-100%)
+        const maxScore = Math.max(...featureImportance.map(f => f.rawScore));
+        const minScore = Math.min(...featureImportance.map(f => f.rawScore));
+        const range = maxScore - minScore;
         
-        // Create pairs of feature names and importance scores
-        const featureImportancePairs = featureNames.map((name, idx) => ({
-            name,
-            importance: normalizedScores[idx],
-            rawScore: importanceScores[idx]
-        }));
+        featureImportance.forEach(feature => {
+            if (range > 0) {
+                // Normalize to 0-1 range, then scale to 0-100
+                const normalized = (feature.rawScore - minScore) / range;
+                feature.importance = normalized * 100;
+            } else {
+                // All scores are the same
+                feature.importance = 100 / featureImportance.length;
+            }
+        });
         
         // Sort by importance (descending)
-        featureImportancePairs.sort((a, b) => b.importance - a.importance);
+        featureImportance.sort((a, b) => b.importance - a.importance);
         
         // Display feature importance
         const container = document.getElementById('featureImportance');
         let html = '';
         
-        if (featureImportancePairs.length === 0) {
+        if (featureImportance.length === 0) {
             html = '<p>No feature importance data available.</p>';
         } else {
-            html += '<p>The sigmoid gate layer learns which features are most important for predicting survival. ' +
+            html += '<p>The feature importance shows which features the model considers most important for predicting survival. ' +
                    'Higher percentages indicate stronger influence on the prediction.</p>';
+            
+            // Create a more detailed explanation
+            html += '<div style="margin-bottom: 20px; padding: 15px; background: #f0f8ff; border-radius: 8px;">';
+            html += '<h4>How Feature Importance is Calculated:</h4>';
+            html += '<ul style="margin-left: 20px;">';
+            html += '<li>We analyze the weights between input features and the first hidden layer</li>';
+            html += '<li>Features with larger absolute weights have stronger influence</li>';
+            html += '<li>Scores are normalized to show relative importance (0-100%)</li>';
+            html += '</ul>';
+            html += '</div>';
+            
             html += '<div class="feature-importance-grid">';
             
-            featureImportancePairs.forEach(pair => {
-                // Calculate width percentage (at least 10% for visibility)
-                const barWidth = Math.max(pair.importance, 10);
+            featureImportance.forEach(feature => {
+                // Ensure minimum visibility for low importance features
+                const barWidth = Math.max(feature.importance, 5);
                 
                 html += '<div class="feature-item">';
-                html += `<div class="feature-name-col">${pair.name}</div>`;
+                html += `<div class="feature-name-col">${feature.name}</div>`;
                 html += '<div class="feature-bar-container">';
                 html += `<div class="feature-bar" style="width: ${barWidth}%;">`;
-                html += `<span class="feature-value">${pair.importance.toFixed(1)}%</span>`;
+                html += `<span class="feature-value">${feature.importance.toFixed(1)}%</span>`;
                 html += '</div>';
                 html += '</div>';
-                html += `<div class="feature-percentage">${pair.importance.toFixed(1)}%</div>`;
+                html += `<div class="feature-percentage">${feature.importance.toFixed(1)}%</div>`;
                 html += '</div>';
             });
             
             html += '</div>';
             
-            // Display top 3 most important features
-            html += '<div style="margin-top: 20px; padding: 15px; background: #f0f8ff; border-radius: 8px;">';
-            html += '<h4>Top Influential Features:</h4>';
-            html += '<ol>';
-            for (let i = 0; i < Math.min(3, featureImportancePairs.length); i++) {
-                html += `<li><strong>${featureImportancePairs[i].name}</strong> (${featureImportancePairs[i].importance.toFixed(1)}%)</li>`;
+            // Display top 3 most important features with explanations
+            html += '<div style="margin-top: 20px; padding: 15px; background: #e8f4f8; border-radius: 8px;">';
+            html += '<h4>Key Insights:</h4>';
+            
+            if (featureImportance.length > 0) {
+                const topFeatures = featureImportance.slice(0, 3);
+                
+                // Try to interpret what each important feature might mean
+                const featureInterpretations = {
+                    'Sex_encoded': 'Gender is typically the strongest predictor of survival (women and children first)',
+                    'Pclass_encoded': 'Passenger class reflects socio-economic status and proximity to lifeboats',
+                    'Age': 'Age affects survival likelihood, with children having priority',
+                    'Fare': 'Ticket fare correlates with class and potentially better survival chances',
+                    'FamilySize': 'Family size may affect ability to evacuate together',
+                    'IsAlone': 'Traveling alone may have different survival dynamics',
+                    'Embarked_encoded': 'Port of embarkation may correlate with cabin location',
+                    'SibSp': 'Number of siblings/spouses affects group dynamics',
+                    'Parch': 'Number of parents/children affects evacuation priorities'
+                };
+                
+                html += '<ol>';
+                topFeatures.forEach((feature, idx) => {
+                    const interpretation = featureInterpretations[feature.name] || 
+                                         'Important factor in survival prediction';
+                    
+                    html += `<li><strong>${feature.name}</strong> (${feature.importance.toFixed(1)}%)`;
+                    html += `<br><span style="font-size: 0.9em; color: #666;">${interpretation}</span>`;
+                    html += `</li>`;
+                });
+                html += '</ol>';
             }
-            html += '</ol>';
+            
+            html += '</div>';
+            
+            // Add debugging information
+            html += '<div style="margin-top: 20px; padding: 10px; background: #f8f9fa; border-radius: 5px; font-size: 0.9em; color: #666;">';
+            html += `<p><strong>Debug Info:</strong> Found ${featureImportance.length} features. `;
+            html += `Raw score range: ${minScore.toFixed(4)} to ${maxScore.toFixed(4)}</p>`;
             html += '</div>';
         }
         
         container.innerHTML = html;
+        updateStatus('featureImportance', 'success', 'Feature importance calculated successfully.');
         
     } catch (error) {
         console.error('Error calculating feature importance:', error);
+        console.error('Error details:', error.message);
+        
+        // Try alternative method if the first one fails
+        tryAlternativeFeatureImportance();
+    }
+}
+
+/**
+ * Alternative method for calculating feature importance
+ * Uses permutation importance if weight-based method fails
+ */
+async function tryAlternativeFeatureImportance() {
+    if (!model || !processedTrainData || !validationData || !validationLabels) {
         const container = document.getElementById('featureImportance');
-        container.innerHTML = `<div class="status error">Error calculating feature importance: ${error.message}</div>`;
+        container.innerHTML = '<div class="status error">Unable to calculate feature importance: insufficient data.</div>';
+        return;
+    }
+    
+    try {
+        updateStatus('featureImportance', 'info', 'Using alternative method to calculate feature importance...');
+        
+        // Get baseline accuracy
+        const predictions = model.predict(validationData);
+        const baselineMetrics = calculateMetrics(validationLabels, predictions, 0.5);
+        const baselineAccuracy = baselineMetrics.accuracy;
+        
+        // Get feature names
+        const featureNames = [
+            ...NUMERICAL_COLS,
+            ...CATEGORICAL_COLS.map(col => `${col}_encoded`)
+        ];
+        
+        if (PREPROCESSING_OPTIONS.createFamilySize) featureNames.push('FamilySize');
+        if (PREPROCESSING_OPTIONS.createIsAlone) featureNames.push('IsAlone');
+        
+        const importanceScores = [];
+        
+        // For each feature, shuffle it and measure accuracy drop
+        for (let i = 0; i < featureNames.length; i++) {
+            // Create a copy of validation data with shuffled feature
+            const shuffledData = validationData.clone();
+            const dataArray = await shuffledData.array();
+            
+            // Shuffle the values in this feature column
+            const columnValues = dataArray.map(row => row[i]);
+            const shuffledValues = [...columnValues].sort(() => Math.random() - 0.5);
+            
+            // Apply shuffled values back to the column
+            for (let j = 0; j < dataArray.length; j++) {
+                dataArray[j][i] = shuffledValues[j];
+            }
+            
+            const shuffledTensor = tf.tensor2d(dataArray);
+            
+            // Calculate accuracy with shuffled feature
+            const shuffledPredictions = model.predict(shuffledTensor);
+            const shuffledMetrics = calculateMetrics(validationLabels, shuffledPredictions, 0.5);
+            
+            // Importance = drop in accuracy when feature is shuffled
+            const importance = baselineAccuracy - shuffledMetrics.accuracy;
+            importanceScores.push({
+                name: featureNames[i],
+                importance: Math.max(importance, 0) // Ensure non-negative
+            });
+            
+            // Clean up
+            shuffledData.dispose();
+            shuffledTensor.dispose();
+            shuffledPredictions.dispose();
+        }
+        
+        // Normalize scores
+        const maxImportance = Math.max(...importanceScores.map(f => f.importance));
+        
+        importanceScores.forEach(feature => {
+            if (maxImportance > 0) {
+                feature.importance = (feature.importance / maxImportance) * 100;
+            } else {
+                feature.importance = 100 / importanceScores.length;
+            }
+        });
+        
+        // Sort by importance
+        importanceScores.sort((a, b) => b.importance - a.importance);
+        
+        // Display results
+        const container = document.getElementById('featureImportance');
+        let html = '<p><strong>Permutation Importance Method:</strong> Measures how much accuracy drops when each feature is randomly shuffled.</p>';
+        html += '<div class="feature-importance-grid">';
+        
+        importanceScores.forEach(feature => {
+            const barWidth = Math.max(feature.importance, 5);
+            
+            html += '<div class="feature-item">';
+            html += `<div class="feature-name-col">${feature.name}</div>`;
+            html += '<div class="feature-bar-container">';
+            html += `<div class="feature-bar" style="width: ${barWidth}%;">`;
+            html += `<span class="feature-value">${feature.importance.toFixed(1)}%</span>`;
+            html += '</div>';
+            html += '</div>';
+            html += `<div class="feature-percentage">${feature.importance.toFixed(1)}%</div>`;
+            html += '</div>';
+        });
+        
+        html += '</div>';
+        
+        // Add note about method
+        html += '<div style="margin-top: 20px; padding: 10px; background: #fff3cd; border-radius: 5px; border: 1px solid #ffeaa7;">';
+        html += '<p><strong>Note:</strong> Using permutation importance method. This method is more computationally intensive but often more reliable than weight-based methods.</p>';
+        html += '</div>';
+        
+        container.innerHTML = html;
+        updateStatus('featureImportance', 'success', 'Feature importance calculated using permutation method.');
+        
+    } catch (error) {
+        console.error('Error in alternative feature importance method:', error);
+        
+        const container = document.getElementById('featureImportance');
+        container.innerHTML = `
+            <div class="status error">
+                Unable to calculate feature importance: ${error.message}
+            </div>
+            <div style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 5px;">
+                <h4>Common reasons for equal feature importance:</h4>
+                <ul>
+                    <li>The model may not have learned meaningful patterns yet</li>
+                    <li>Features may be highly correlated</li>
+                    <li>The dataset may be too small or not diverse enough</li>
+                    <li>The model architecture may need adjustment</li>
+                </ul>
+                <p>Try training for more epochs or with different hyperparameters.</p>
+            </div>
+        `;
     }
 }
 
