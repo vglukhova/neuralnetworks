@@ -262,36 +262,43 @@
         }
         
         .feature-bar {
-            display: flex;
-            align-items: center;
-            margin: 8px 0;
-        }
-        
+    display: flex;
+    align-items: center;
+    margin: 8px 0;
+}
+
         .feature-name {
-            width: 120px;
-            font-weight: bold;
-        }
-        
+    width: 120px;
+    font-weight: bold;
+    text-align: right;
+    padding-right: 10px;
+}
+
+        .feature-bar-container {
+    flex: 1;
+    height: 24px;
+    background: #e0e0e0;
+    border-radius: 4px;
+    overflow: visible;
+    position: relative;
+    min-width: 100px;
+}
+
         .feature-bar-value {
-            height: 24px;
-            background: linear-gradient(to right, #26d0ce, #1a2980);
-            border-radius: 4px;
-            color: white;
-            padding: 0 10px;
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            min-width: 40px;
-        }
-        
-        footer {
-            margin-top: 40px;
-            padding: 20px;
-            text-align: center;
-            color: #666;
-            border-top: 1px solid #ddd;
-            font-size: 0.9rem;
-        }
+    height: 100%;
+    background: linear-gradient(to right, #26d0ce, #1a2980);
+    border-radius: 4px;
+    min-width: 30px; /* Minimum width so small percentages are visible */
+    position: relative;
+}
+
+        .feature-percentage {
+    width: 60px;
+    text-align: left;
+    padding-left: 10px;
+    font-weight: bold;
+    color: #333;
+}
         
         @media (max-width: 768px) {
             .workflow {
