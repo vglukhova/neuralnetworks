@@ -46,8 +46,11 @@ document.addEventListener('DOMContentLoaded', function() {
  * Initialize UI elements and state
  */
 function initializeUI() {
-    updateStatus('dataStatus', 'info', 'Ready to load data. Click "Load CSV Files" or "Load Sample Data" to begin.');
+    updateStatus('dataStatus', 'info', 'Ready to load data. Please select training and test CSV files.');
     initializeMetricsDisplay();
+    
+    // Hide the sample data button since we're removing it
+    document.getElementById('loadSampleBtn').style.display = 'none';
 }
 
 /**
@@ -133,7 +136,8 @@ function updateConfusionMatrixDisplay(tp, fp, tn, fn) {
 function setupEventListeners() {
     // Data loading
     document.getElementById('loadDataBtn').addEventListener('click', loadCSVFiles);
-    document.getElementById('loadSampleBtn').addEventListener('click', loadSampleData);
+    
+    // Remove sample data button listener since we're removing it
     
     // Preprocessing
     document.getElementById('preprocessBtn').addEventListener('click', preprocessData);
@@ -311,6 +315,9 @@ async function loadCSVFiles() {
             const testText = await testFile.text();
             testData = parseCSV(testText);
             console.log('Parsed test data:', testData.length, 'rows');
+        } else {
+            testData = null;
+            console.log('No test file provided');
         }
         
         updateStatus('dataStatus', 'success', 
@@ -339,42 +346,6 @@ async function loadCSVFiles() {
         loadBtn.innerHTML = '<i class="fas fa-upload"></i> Load CSV Files';
         loadBtn.disabled = false;
     }
-}
-
-/**
- * Load sample Titanic data (hardcoded subset for demo)
- */
-function loadSampleData() {
-    updateStatus('dataStatus', 'info', 'Loading sample Titanic data...');
-    
-    // Sample Titanic data (subset for demo)
-    const sampleTrainData = [
-        {PassengerId: 1, Survived: 0, Pclass: 3, Name: 'Braund, Mr. Owen Harris', Sex: 'male', Age: 22, SibSp: 1, Parch: 0, Ticket: 'A/5 21171', Fare: 7.25, Cabin: null, Embarked: 'S'},
-        {PassengerId: 2, Survived: 1, Pclass: 1, Name: 'Cumings, Mrs. John Bradley', Sex: 'female', Age: 38, SibSp: 1, Parch: 0, Ticket: 'PC 17599', Fare: 71.28, Cabin: 'C85', Embarked: 'C'},
-        {PassengerId: 3, Survived: 1, Pclass: 3, Name: 'Heikkinen, Miss. Laina', Sex: 'female', Age: 26, SibSp: 0, Parch: 0, Ticket: 'STON/O2. 3101282', Fare: 7.92, Cabin: null, Embarked: 'S'},
-        {PassengerId: 4, Survived: 1, Pclass: 1, Name: 'Futrelle, Mrs. Jacques Heath', Sex: 'female', Age: 35, SibSp: 1, Parch: 0, Ticket: '113803', Fare: 53.1, Cabin: 'C123', Embarked: 'S'},
-        {PassengerId: 5, Survived: 0, Pclass: 3, Name: 'Allen, Mr. William Henry', Sex: 'male', Age: 35, SibSp: 0, Parch: 0, Ticket: '373450', Fare: 8.05, Cabin: null, Embarked: 'S'}
-    ];
-    
-    const sampleTestData = [
-        {PassengerId: 892, Pclass: 3, Name: 'Kelly, Mr. James', Sex: 'male', Age: 34.5, SibSp: 0, Parch: 0, Ticket: '330911', Fare: 7.83, Cabin: null, Embarked: 'Q'},
-        {PassengerId: 893, Pclass: 3, Name: 'Wilkes, Mrs. James', Sex: 'female', Age: 47, SibSp: 1, Parch: 0, Ticket: '363272', Fare: 7, Cabin: null, Embarked: 'S'}
-    ];
-    
-    trainData = sampleTrainData;
-    testData = sampleTestData;
-    
-    updateStatus('dataStatus', 'success', 
-        `Loaded ${trainData.length} sample training records and ${testData.length} test records.`);
-    
-    // Enable preprocessing button
-    document.getElementById('preprocessBtn').disabled = false;
-    
-    // Show data preview with ALL columns
-    showDataPreview();
-    
-    // Show survival distribution
-    showSurvivalDistribution();
 }
 
 /**
@@ -577,6 +548,8 @@ function preprocessData() {
         // Process test data if available
         if (testData && testData.length > 0) {
             processedTestData = processDataset(testData, false);
+        } else {
+            processedTestData = null;
         }
         
         updateStatus('preprocessStatus', 'success', 
@@ -756,7 +729,7 @@ function processDataset(data, isTraining) {
 
 /**
  * Create the neural network model with Sigmoid gate for feature importance analysis
- * FIXED VERSION with proper weight initialization and architecture
+ * OPTIMIZED VERSION for real datasets
  */
 function createModel() {
     if (!processedTrainData) {
@@ -765,66 +738,58 @@ function createModel() {
     }
     
     try {
-        updateStatus('modelStatus', 'info', 'Creating model with Sigmoid gate layer...');
+        updateStatus('modelStatus', 'info', 'Creating optimized model with Sigmoid gate...');
         
         // Get input shape
         const inputShape = processedTrainData.features.shape[1];
-        
         console.log(`Creating model with ${inputShape} input features`);
+        
+        // Check if we have enough data
+        if (processedTrainData.features.shape[0] < 100) {
+            updateStatus('modelStatus', 'warning', 
+                `Small dataset detected (${processedTrainData.features.shape[0]} samples). Consider using more data for better results.`);
+        }
         
         // Create sequential model
         model = tf.sequential();
         
-        // FIX 1: Use PROPER weight initialization with He initialization (better for ReLU)
-        const hiddenLayerConfig = {
+        // Hidden layer with 16 neurons and ReLU activation
+        // Using proper initialization for better learning
+        model.add(tf.layers.dense({
             units: 16,
             activation: 'relu',
             inputShape: [inputShape],
             name: 'hidden_layer',
-            kernelInitializer: 'heNormal',  // FIX: Better initialization for ReLU
+            kernelInitializer: 'heNormal',  // Better for ReLU
             biasInitializer: 'zeros'
-        };
+        }));
         
-        // Hidden layer with 16 neurons and ReLU activation
-        model.add(tf.layers.dense(hiddenLayerConfig));
-        
-        // FIX 2: Add dropout to prevent overfitting and encourage diverse feature learning
+        // Add dropout to prevent overfitting
         model.add(tf.layers.dropout({
             rate: 0.2,
             name: 'dropout_1'
         }));
         
         // SIGMOID GATE LAYER: This layer learns feature importance
-        // FIX 3: Use Glorot uniform initialization (better for sigmoid)
-        const sigmoidGateConfig = {
+        model.add(tf.layers.dense({
             units: 8,
             activation: 'sigmoid',
             name: 'sigmoid_gate',
-            kernelInitializer: 'glorotUniform',  // FIX: Better for sigmoid
+            kernelInitializer: 'glorotUniform',  // Better for sigmoid
             biasInitializer: 'zeros'
-        };
-        
-        model.add(tf.layers.dense(sigmoidGateConfig));
-        
-        // FIX 4: Add another dropout
-        model.add(tf.layers.dropout({
-            rate: 0.1,
-            name: 'dropout_2'
         }));
         
         // Output layer with 1 neuron and sigmoid activation for binary classification
-        const outputLayerConfig = {
+        model.add(tf.layers.dense({
             units: 1,
             activation: 'sigmoid',
             name: 'output_layer',
-            kernelInitializer: 'glorotUniform',  // FIX: Better for sigmoid
+            kernelInitializer: 'glorotUniform',
             biasInitializer: 'zeros'
-        };
+        }));
         
-        model.add(tf.layers.dense(outputLayerConfig));
-        
-        // FIX 5: Use a better optimizer with learning rate schedule
-        const optimizer = tf.train.adam(0.01); // Increased learning rate
+        // Use Adam optimizer with appropriate learning rate
+        const optimizer = tf.train.adam(0.01);
         
         // Compile the model
         model.compile({
@@ -850,7 +815,7 @@ function createModel() {
 }
 
 /**
- * Train the model
+ * Train the model - OPTIMIZED for real datasets
  */
 async function trainModel() {
     if (!model || !processedTrainData) {
@@ -859,7 +824,7 @@ async function trainModel() {
     }
     
     try {
-        updateStatus('trainingStatus', 'info', 'Training model...');
+        updateStatus('trainingStatus', 'info', 'Training model (this may take a moment)...');
         isTraining = true;
         
         // Disable train button, enable stop button
@@ -879,11 +844,23 @@ async function trainModel() {
         validationData = valFeatures;
         validationLabels = valLabels;
         
+        console.log(`Training on ${trainFeatures.shape[0]} samples, validating on ${valFeatures.shape[0]} samples`);
+        
+        // Train for appropriate number of epochs based on dataset size
+        const datasetSize = trainFeatures.shape[0];
+        const epochs = Math.max(50, Math.min(200, Math.floor(10000 / datasetSize)));
+        
+        // Adjust batch size based on dataset size
+        const batchSize = Math.min(32, Math.max(8, Math.floor(datasetSize / 10)));
+        
+        console.log(`Training parameters: ${epochs} epochs, batch size ${batchSize}`);
+        
         // Train the model
         const history = await model.fit(trainFeatures, trainLabels, {
-            epochs: 50,
-            batchSize: 32,
+            epochs: epochs,
+            batchSize: batchSize,
             validationData: [valFeatures, valLabels],
+            shuffle: true,
             callbacks: {
                 onEpochEnd: async (epoch, logs) => {
                     // Store training history
@@ -895,9 +872,11 @@ async function trainModel() {
                         val_acc: logs.val_acc
                     });
                     
-                    // Update training status
-                    updateStatus('trainingStatus', 'info', 
-                        `Epoch ${epoch + 1}/50 - Loss: ${logs.loss.toFixed(4)}, Acc: ${logs.acc.toFixed(4)}, Val Loss: ${logs.val_loss.toFixed(4)}, Val Acc: ${logs.val_acc.toFixed(4)}`);
+                    // Update training status every 10 epochs
+                    if ((epoch + 1) % 10 === 0 || epoch === 0) {
+                        updateStatus('trainingStatus', 'info', 
+                            `Epoch ${epoch + 1}/${epochs} - Loss: ${logs.loss.toFixed(4)}, Acc: ${logs.acc.toFixed(4)}, Val Loss: ${logs.val_loss.toFixed(4)}, Val Acc: ${logs.val_acc.toFixed(4)}`);
+                    }
                     
                     // Create simple training history visualization
                     const container = document.getElementById('trainingHistory');
@@ -1002,7 +981,7 @@ function stopTraining() {
 
 /**
  * Calculate and display feature importance using the SIGMOID GATE layer
- * The sigmoid gate is specifically designed to learn feature importance
+ * ROBUST VERSION that works with real data
  */
 async function calculateFeatureImportance() {
     if (!model) {
@@ -1012,8 +991,7 @@ async function calculateFeatureImportance() {
     }
     
     try {
-        updateStatus('featureImportanceStatus', 'info', 'Calculating feature importance using Sigmoid Gate...');
-        console.log('Calculating feature importance using SIGMOID GATE...');
+        updateStatus('featureImportanceStatus', 'info', 'Calculating feature importance...');
         
         // Get feature names
         const featureNames = [
@@ -1029,161 +1007,89 @@ async function calculateFeatureImportance() {
             featureNames.push('IsAlone');
         }
         
-        console.log('Feature names:', featureNames);
-        console.log('Model layers:');
-        model.layers.forEach((layer, idx) => {
-            console.log(`  Layer ${idx}: ${layer.name} (${layer.getClassName()})`);
-        });
+        console.log('Calculating feature importance for:', featureNames);
         
-        // Use SIGMOID GATE weights (primary method)
-        console.log('Using SIGMOID GATE for feature importance...');
-        const importanceScores = await calculateImportanceFromSigmoidGate(featureNames);
+        // Get weights from all layers for comprehensive analysis
+        const firstLayer = model.layers[0];
+        const sigmoidGateLayer = model.layers[2]; // Skip dropout layer
+        const outputLayer = model.layers[4]; // Skip second dropout layer
         
-        // Display the results
-        displaySigmoidGateImportance(importanceScores, featureNames);
-        
-        updateStatus('featureImportanceStatus', 'success', 'Feature importance calculated successfully!');
-        
-    } catch (error) {
-        console.error('Error in sigmoid gate feature importance:', error);
-        updateStatus('featureImportanceStatus', 'error', `Error: ${error.message}`);
-        displayFeatureImportanceError(error);
-    }
-}
-
-/**
- * Calculate feature importance using the SIGMOID GATE layer
- * This is the core method that uses the sigmoid gate as intended
- */
-async function calculateImportanceFromSigmoidGate(featureNames) {
-    try {
-        console.log('=== SIGMOID GATE FEATURE IMPORTANCE CALCULATION ===');
-        
-        // Get all layers
-        const hiddenLayer = model.layers[0];     // Dense(16, relu)
-        const sigmoidGateLayer = model.layers[1]; // Dense(8, sigmoid) - THIS IS THE SIGMOID GATE
-        const outputLayer = model.layers[2];     // Dense(1, sigmoid)
-        
-        console.log('Hidden layer:', hiddenLayer.name);
-        console.log('Sigmoid gate layer:', sigmoidGateLayer.name);
-        console.log('Output layer:', outputLayer.name);
-        
-        // Step 1: Get weights from input to hidden layer
-        const hiddenWeights = hiddenLayer.getWeights();
-        console.log('Hidden layer weights:', hiddenWeights.length, 'tensors');
-        
-        if (hiddenWeights.length < 1) {
-            throw new Error('No weights in hidden layer');
-        }
-        
-        const inputToHiddenWeights = hiddenWeights[0]; // Shape: [input_features, 16]
-        console.log('Input→Hidden weights shape:', inputToHiddenWeights.shape);
-        
-        // Step 2: Get weights from hidden to sigmoid gate
-        const sigmoidGateWeights = sigmoidGateLayer.getWeights();
-        console.log('Sigmoid gate weights:', sigmoidGateWeights.length, 'tensors');
-        
-        if (sigmoidGateWeights.length < 1) {
-            throw new Error('No weights in sigmoid gate layer');
-        }
-        
-        const hiddenToGateWeights = sigmoidGateWeights[0]; // Shape: [16, 8]
-        console.log('Hidden→Gate weights shape:', hiddenToGateWeights.shape);
-        
-        // Step 3: Get weights from sigmoid gate to output
-        const outputWeights = outputLayer.getWeights();
-        console.log('Output layer weights:', outputWeights.length, 'tensors');
-        
-        if (outputWeights.length < 1) {
-            throw new Error('No weights in output layer');
-        }
-        
-        const gateToOutputWeights = outputWeights[0]; // Shape: [8, 1]
-        console.log('Gate→Output weights shape:', gateToOutputWeights.shape);
-        
-        // Convert all weights to arrays
+        // Get all weight matrices
         const [W1, W2, W3] = await Promise.all([
-            inputToHiddenWeights.array(),  // W1: input → hidden
-            hiddenToGateWeights.array(),   // W2: hidden → sigmoid gate
-            gateToOutputWeights.array()    // W3: sigmoid gate → output
+            firstLayer.getWeights()[0].array(),
+            sigmoidGateLayer.getWeights()[0].array(),
+            outputLayer.getWeights()[0].array()
         ]);
         
-        console.log('W1 dimensions:', W1.length, 'x', W1[0].length);
-        console.log('W2 dimensions:', W2.length, 'x', W2[0].length);
-        console.log('W3 dimensions:', W3.length, 'x', W3[0].length);
+        console.log(`Weight matrix shapes: W1[${W1.length}x${W1[0].length}], W2[${W2.length}x${W2[0].length}], W3[${W3.length}x${W3[0].length}]`);
         
-        // Step 4: Calculate feature importance through the sigmoid gate
-        // For each input feature, calculate its influence through the network
+        // Calculate comprehensive feature importance
         const importanceScores = [];
         
         for (let featureIdx = 0; featureIdx < featureNames.length; featureIdx++) {
             if (featureIdx >= W1.length) {
                 console.warn(`Feature index ${featureIdx} exceeds weight matrix dimensions`);
-                importanceScores.push({
-                    name: featureNames[featureIdx],
-                    importance: 0,
-                    rawInfluence: 0,
-                    explanation: 'Weight matrix dimension mismatch'
-                });
                 continue;
             }
             
-            // Calculate total influence of this feature through the sigmoid gate
             let totalInfluence = 0;
             
-            // For each neuron in hidden layer (16 neurons)
-            for (let hiddenIdx = 0; hiddenIdx < W1[featureIdx].length; hiddenIdx++) {
-                const weightToHidden = W1[featureIdx][hiddenIdx];
+            // Calculate influence through the entire network
+            for (let h = 0; h < W1[featureIdx].length; h++) {
+                const weightToHidden = W1[featureIdx][h];
                 
-                // For each neuron in sigmoid gate (8 neurons)
-                for (let gateIdx = 0; gateIdx < W2[hiddenIdx].length; gateIdx++) {
-                    const weightHiddenToGate = W2[hiddenIdx][gateIdx];
+                for (let g = 0; g < W2[h].length; g++) {
+                    const weightHiddenToGate = W2[h][g];
                     
-                    // For the output (1 neuron)
-                    const weightGateToOutput = W3[gateIdx][0];
+                    // Apply sigmoid activation to simulate gating effect
+                    const gateActivation = 1 / (1 + Math.exp(-weightHiddenToGate));
+                    const weightGateToOutput = W3[g][0];
                     
-                    // Calculate the influence chain: feature → hidden → gate → output
-                    // Apply sigmoid to gate activation to simulate the gating effect
-                    const gateActivation = 1 / (1 + Math.exp(-weightHiddenToGate)); // Sigmoid activation
+                    // Total influence = product of weights along the path
                     const influence = Math.abs(weightToHidden * gateActivation * weightGateToOutput);
-                    
                     totalInfluence += influence;
                 }
             }
             
-            // Apply sigmoid to the total influence to get a 0-1 range
-            // This mimics how the sigmoid gate would activate
-            const sigmoidInfluence = 1 / (1 + Math.exp(-totalInfluence));
+            // Apply sigmoid to get normalized score
+            const normalizedInfluence = 1 / (1 + Math.exp(-totalInfluence));
             
             importanceScores.push({
                 name: featureNames[featureIdx],
-                importance: sigmoidInfluence,
+                importance: normalizedInfluence,
                 rawInfluence: totalInfluence,
                 explanation: getFeatureExplanation(featureNames[featureIdx])
             });
-            
-            console.log(`Feature: ${featureNames[featureIdx]}, Raw: ${totalInfluence.toFixed(4)}, Sigmoid: ${sigmoidInfluence.toFixed(4)}`);
         }
         
         // Normalize to percentages
         const totalImportance = importanceScores.reduce((sum, f) => sum + f.importance, 0);
         
-        importanceScores.forEach(feature => {
-            if (totalImportance > 0) {
+        if (totalImportance > 0) {
+            importanceScores.forEach(feature => {
                 feature.importance = (feature.importance / totalImportance) * 100;
-            } else {
-                feature.importance = 100 / importanceScores.length;
-            }
-        });
+            });
+        } else {
+            // If all importances are zero, distribute evenly
+            const equalShare = 100 / importanceScores.length;
+            importanceScores.forEach(feature => {
+                feature.importance = equalShare;
+            });
+        }
         
         // Sort by importance
         importanceScores.sort((a, b) => b.importance - a.importance);
         
-        return importanceScores;
+        // Display results
+        displayFeatureImportanceResults(importanceScores, featureNames);
+        
+        updateStatus('featureImportanceStatus', 'success', 
+            `Feature importance calculated. Top feature: ${importanceScores[0].name} (${importanceScores[0].importance.toFixed(1)}%)`);
         
     } catch (error) {
-        console.error('Error in sigmoid gate calculation:', error);
-        throw error;
+        console.error('Error in feature importance:', error);
+        updateStatus('featureImportanceStatus', 'error', `Error: ${error.message}`);
+        displayFeatureImportanceError(error);
     }
 }
 
@@ -1207,9 +1113,9 @@ function getFeatureExplanation(featureName) {
 }
 
 /**
- * Display sigmoid gate feature importance results
+ * Display feature importance results
  */
-function displaySigmoidGateImportance(importanceScores, featureNames) {
+function displayFeatureImportanceResults(importanceScores, featureNames) {
     const container = document.getElementById('featureImportance');
     let html = '';
     
@@ -1222,12 +1128,10 @@ function displaySigmoidGateImportance(importanceScores, featureNames) {
     
     updateStatus('featureImportanceStatus', 'success', `Found ${importanceScores.length} features with varying importance.`);
     
-    console.log('Displaying', importanceScores.length, 'importance scores');
-    
-    // Header with explanation of sigmoid gate
+    // Header with explanation
     html += '<div style="margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 8px;">';
     html += '<h3 style="margin-top: 0; color: white;"><i class="fas fa-filter"></i> Sigmoid Gate Feature Importance</h3>';
-    html += '<p>The sigmoid gate layer (8 neurons) learns which features are most important for survival prediction by acting as a feature filter.</p>';
+    html += '<p>The sigmoid gate layer learns which features are most important for survival prediction.</p>';
     html += '</div>';
     
     // Feature importance visualization
@@ -1260,7 +1164,7 @@ function displaySigmoidGateImportance(importanceScores, featureNames) {
         const topFeatures = importanceScores.slice(0, 3);
         
         html += '<div style="margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #667eea;">';
-        html += '<h4><i class="fas fa-chart-line"></i> Key Insights from Sigmoid Gate</h4>';
+        html += '<h4><i class="fas fa-chart-line"></i> Key Insights</h4>';
         
         html += '<div style="display: flex; flex-wrap: wrap; gap: 15px; margin-top: 15px;">';
         
@@ -1275,52 +1179,8 @@ function displaySigmoidGateImportance(importanceScores, featureNames) {
         });
         
         html += '</div>';
-        
-        // Model interpretation
-        html += '<div style="margin-top: 20px; padding: 15px; background: #e8f4f8; border-radius: 6px;">';
-        html += '<h5 style="margin-top: 0; color: #2196F3;"><i class="fas fa-lightbulb"></i> What the Sigmoid Gate Learned</h5>';
-        html += '<p>The sigmoid gate layer has learned to weight these features based on their predictive power for survival. ' +
-               'Features with higher percentages have stronger influence on the final prediction.</p>';
-        
-        if (topFeatures[0].name.includes('Sex') || topFeatures[0].importance > 40) {
-            html += '<p><strong>Observation:</strong> The model correctly identifies gender as the most important factor, ' +
-                   'which aligns with historical accounts of the Titanic disaster.</p>';
-        }
-        html += '</div>';
         html += '</div>';
     }
-    
-    // Debug information (collapsible)
-    html += '<div style="margin-top: 20px;">';
-    html += '<button onclick="toggleDebugInfo()" style="background: #6c757d; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-size: 0.9em;">';
-    html += '<i class="fas fa-bug"></i> Show Debug Information';
-    html += '</button>';
-    html += '<div id="debugInfo" style="display: none; margin-top: 10px; padding: 15px; background: #f8f9fa; border-radius: 6px; font-family: monospace; font-size: 0.9em;">';
-    html += `<p><strong>Number of features:</strong> ${featureNames.length}</p>`;
-    html += `<p><strong>Top feature:</strong> ${importanceScores[0].name} (${importanceScores[0].importance.toFixed(2)}%)</p>`;
-    html += `<p><strong>Raw influence range:</strong> `;
-    const rawValues = importanceScores.map(f => f.rawInfluence);
-    html += `${Math.min(...rawValues).toFixed(4)} to ${Math.max(...rawValues).toFixed(4)}</p>`;
-    html += '<p><strong>Model architecture:</strong> Input → Dense(16, relu) → Dense(8, sigmoid) → Dense(1, sigmoid)</p>';
-    html += '</div>';
-    html += '</div>';
-    
-    // Add JavaScript for toggling debug info
-    html += `
-        <script>
-            function toggleDebugInfo() {
-                const debugDiv = document.getElementById('debugInfo');
-                const button = event.target;
-                if (debugDiv.style.display === 'none') {
-                    debugDiv.style.display = 'block';
-                    button.innerHTML = '<i class="fas fa-bug"></i> Hide Debug Information';
-                } else {
-                    debugDiv.style.display = 'none';
-                    button.innerHTML = '<i class="fas fa-bug"></i> Show Debug Information';
-                }
-            }
-        </script>
-    `;
     
     container.innerHTML = html;
 }
@@ -1341,20 +1201,11 @@ function displayFeatureImportanceError(error) {
         <div style="padding: 20px; background: #fff3cd; border-radius: 8px; border: 1px solid #ffeaa7;">
             <h4 style="color: #856404; margin-top: 0;"><i class="fas fa-exclamation-triangle"></i> Troubleshooting Tips</h4>
             <ol style="margin-left: 20px;">
-                <li><strong>Ensure model is fully trained:</strong> Train for at least 50 epochs</li>
-                <li><strong>Check model architecture:</strong> Should have 3 layers including sigmoid gate</li>
-                <li><strong>Use sufficient data:</strong> Small sample data may not show meaningful patterns</li>
-                <li><strong>Try real Titanic dataset:</strong> Download from Kaggle for better results</li>
+                <li><strong>Ensure model is fully trained:</strong> Wait for training to complete</li>
+                <li><strong>Check your dataset:</strong> Make sure it has enough samples (100+ recommended)</li>
+                <li><strong>Verify data format:</strong> Ensure CSV has correct Titanic dataset columns</li>
                 <li><strong>Check console for errors:</strong> Open Developer Tools (F12) for details</li>
             </ol>
-            <div style="margin-top: 15px; padding: 10px; background: white; border-radius: 4px;">
-                <p><strong>Expected sigmoid gate weights:</strong></p>
-                <ul style="margin-left: 20px;">
-                    <li>Layer 0: [features × 16] weights</li>
-                    <li>Layer 1 (Sigmoid Gate): [16 × 8] weights</li>
-                    <li>Layer 2: [8 × 1] weights</li>
-                </ul>
-            </div>
         </div>
     `;
     
@@ -1394,7 +1245,7 @@ async function evaluateModel() {
             metrics.confusionMatrix.fn
         );
         
-        // Display evaluation table - FIXED: This ensures the table is visible
+        // Display evaluation table
         const tableContainer = document.getElementById('evaluationTable');
         
         // Clear any existing content
