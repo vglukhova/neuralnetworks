@@ -94,30 +94,18 @@ function parseCSV(csvText) {
         csvText = csvText.slice(1);
     }
     
-    const lines = csvText.split('\n');
+    // Split into lines
+    const lines = csvText.split(/\r\n|\n|\r/);
     if (lines.length === 0) {
         throw new Error('CSV file is empty');
     }
     
-    // Parse headers (first non-empty line)
-    let headerLine = '';
-    for (let i = 0; i < lines.length; i++) {
-        if (lines[i].trim() !== '') {
-            headerLine = lines[i];
-            lines.splice(0, i + 1);
-            break;
-        }
-    }
-    
-    if (!headerLine) {
-        throw new Error('No headers found in CSV');
-    }
-    
-    const headers = parseCSVLine(headerLine);
+    // Parse headers (first line)
+    const headers = parseCSVLine(lines[0]);
     
     // Parse data rows
     const data = [];
-    for (let i = 0; i < lines.length; i++) {
+    for (let i = 1; i < lines.length; i++) {
         const line = lines[i].trim();
         if (line === '') continue;
         
@@ -125,7 +113,7 @@ function parseCSV(csvText) {
         
         // Skip rows with wrong number of values
         if (values.length !== headers.length) {
-            console.warn(`Skipping row ${i + 2}: expected ${headers.length} columns, got ${values.length}`);
+            console.warn(`Skipping row ${i + 1}: expected ${headers.length} columns, got ${values.length}`);
             continue;
         }
         
@@ -134,9 +122,15 @@ function parseCSV(csvText) {
         for (let j = 0; j < headers.length; j++) {
             let value = values[j];
             
+            // Remove surrounding quotes if present
+            if (typeof value === 'string' && value.startsWith('"') && value.endsWith('"')) {
+                value = value.substring(1, value.length - 1);
+            }
+            
             // Convert numeric values (skip empty strings)
             if (value !== '' && !isNaN(value) && value !== null) {
-                value = parseFloat(value);
+                // Check if it's an integer or float
+                value = value.includes('.') ? parseFloat(value) : parseInt(value, 10);
             }
             
             row[headers[j]] = value === '' ? null : value;
@@ -185,7 +179,7 @@ function parseCSVLine(line) {
     values.push(currentValue);
     
     return values;
-}    
+}
 
 /**
  * Load CSV files from file inputs
@@ -210,14 +204,24 @@ async function loadCSVFiles() {
         
         // Load training data
         const trainFile = trainFileInput.files[0];
+        console.log('Loading training file:', trainFile.name);
         const trainText = await trainFile.text();
+        console.log('Training file size:', trainText.length, 'characters');
+        
+        // Log first few lines for debugging
+        const firstLines = trainText.split(/\r\n|\n|\r/).slice(0, 3);
+        console.log('First 3 lines of training CSV:', firstLines);
+        
         trainData = parseCSV(trainText);
+        console.log('Parsed training data:', trainData.length, 'rows');
         
         // Load test data if provided
         if (testFileInput.files[0]) {
             const testFile = testFileInput.files[0];
+            console.log('Loading test file:', testFile.name);
             const testText = await testFile.text();
             testData = parseCSV(testText);
+            console.log('Parsed test data:', testData.length, 'rows');
         }
         
         updateStatus('dataStatus', 'success', 
@@ -238,6 +242,7 @@ async function loadCSVFiles() {
         
     } catch (error) {
         console.error('Error loading CSV files:', error);
+        console.error('Error stack:', error.stack);
         updateStatus('dataStatus', 'error', `Error loading CSV: ${error.message}. Make sure you're using the Titanic dataset format.`);
         
         // Reset button on error
@@ -246,6 +251,7 @@ async function loadCSVFiles() {
         loadBtn.disabled = false;
     }
 }
+
 /**
  * Load sample Titanic data (hardcoded subset for demo)
  */
@@ -254,24 +260,17 @@ function loadSampleData() {
     
     // Sample Titanic data (subset for demo)
     const sampleTrainData = [
-        {PassengerId: 1, Survived: 0, Pclass: 3, Sex: 'male', Age: 22, SibSp: 1, Parch: 0, Fare: 7.25, Embarked: 'S'},
-        {PassengerId: 2, Survived: 1, Pclass: 1, Sex: 'female', Age: 38, SibSp: 1, Parch: 0, Fare: 71.28, Embarked: 'C'},
-        {PassengerId: 3, Survived: 1, Pclass: 3, Sex: 'female', Age: 26, SibSp: 0, Parch: 0, Fare: 7.92, Embarked: 'S'},
-        {PassengerId: 4, Survived: 1, Pclass: 1, Sex: 'female', Age: 35, SibSp: 1, Parch: 0, Fare: 53.1, Embarked: 'S'},
-        {PassengerId: 5, Survived: 0, Pclass: 3, Sex: 'male', Age: 35, SibSp: 0, Parch: 0, Fare: 8.05, Embarked: 'S'},
-        {PassengerId: 6, Survived: 0, Pclass: 3, Sex: 'male', Age: null, SibSp: 0, Parch: 0, Fare: 8.46, Embarked: 'Q'},
-        {PassengerId: 7, Survived: 0, Pclass: 1, Sex: 'male', Age: 54, SibSp: 0, Parch: 0, Fare: 51.86, Embarked: 'S'},
-        {PassengerId: 8, Survived: 0, Pclass: 3, Sex: 'male', Age: 2, SibSp: 3, Parch: 1, Fare: 21.08, Embarked: 'S'},
-        {PassengerId: 9, Survived: 1, Pclass: 3, Sex: 'female', Age: 27, SibSp: 0, Parch: 2, Fare: 11.13, Embarked: 'S'},
-        {PassengerId: 10, Survived: 1, Pclass: 2, Sex: 'female', Age: 14, SibSp: 1, Parch: 0, Fare: 30.07, Embarked: 'C'}
+        {PassengerId: 1, Survived: 0, Pclass: 3, Name: 'Braund, Mr. Owen Harris', Sex: 'male', Age: 22, SibSp: 1, Parch: 0, Ticket: 'A/5 21171', Fare: 7.25, Cabin: null, Embarked: 'S'},
+        {PassengerId: 2, Survived: 1, Pclass: 1, Name: 'Cumings, Mrs. John Bradley', Sex: 'female', Age: 38, SibSp: 1, Parch: 0, Ticket: 'PC 17599', Fare: 71.28, Cabin: 'C85', Embarked: 'C'},
+        {PassengerId: 3, Survived: 1, Pclass: 3, Name: 'Heikkinen, Miss. Laina', Sex: 'female', Age: 26, SibSp: 0, Parch: 0, Ticket: 'STON/O2. 3101282', Fare: 7.92, Cabin: null, Embarked: 'S'},
+        {PassengerId: 4, Survived: 1, Pclass: 1, Name: 'Futrelle, Mrs. Jacques Heath', Sex: 'female', Age: 35, SibSp: 1, Parch: 0, Ticket: '113803', Fare: 53.1, Cabin: 'C123', Embarked: 'S'},
+        {PassengerId: 5, Survived: 0, Pclass: 3, Name: 'Allen, Mr. William Henry', Sex: 'male', Age: 35, SibSp: 0, Parch: 0, Ticket: '373450', Fare: 8.05, Cabin: null, Embarked: 'S'}
     ];
     
     const sampleTestData = [
-        {PassengerId: 11, Pclass: 3, Sex: 'male', Age: 4, SibSp: 1, Parch: 1, Fare: 16.7, Embarked: 'S'},
-        {PassengerId: 12, Pclass: 1, Sex: 'female', Age: 58, SibSp: 0, Parch: 0, Fare: 26.55, Embarked: 'S'},
-        {PassengerId: 13, Pclass: 3, Sex: 'male', Age: 20, SibSp: 0, Parch: 0, Fare: 8.05, Embarked: 'S'},
-        {PassengerId: 14, Pclass: 3, Sex: 'male', Age: 39, SibSp: 1, Parch: 5, Fare: 31.28, Embarked: 'S'},
-        {PassengerId: 15, Pclass: 3, Sex: 'female', Age: 14, SibSp: 0, Parch: 0, Fare: 7.85, Embarked: 'S'}
+        {PassengerId: 892, Pclass: 3, Name: 'Kelly, Mr. James', Sex: 'male', Age: 34.5, SibSp: 0, Parch: 0, Ticket: '330911', Fare: 7.83, Cabin: null, Embarked: 'Q'},
+        {PassengerId: 893, Pclass: 3, Name: 'Wilkes, Mrs. James', Sex: 'female', Age: 47, SibSp: 1, Parch: 0, Ticket: '363272', Fare: 7, Cabin: null, Embarked: 'S'},
+        {PassengerId: 894, Pclass: 2, Name: 'Myles, Mr. Thomas Francis', Sex: 'male', Age: 62, SibSp: 0, Parch: 0, Ticket: '240276', Fare: 9.69, Cabin: null, Embarked: 'Q'}
     ];
     
     trainData = sampleTrainData;
@@ -307,8 +306,9 @@ function showDataPreview() {
     let html = '<table>';
     html += '<thead><tr>';
     
-    // Headers
-    Object.keys(previewRows[0]).forEach(col => {
+    // Headers (only show relevant columns)
+    const relevantCols = ['PassengerId', 'Survived', 'Pclass', 'Sex', 'Age', 'SibSp', 'Parch', 'Fare', 'Embarked'];
+    relevantCols.forEach(col => {
         html += `<th>${col}</th>`;
     });
     
@@ -317,7 +317,8 @@ function showDataPreview() {
     // Data rows
     previewRows.forEach(row => {
         html += '<tr>';
-        Object.values(row).forEach(val => {
+        relevantCols.forEach(col => {
+            const val = row[col];
             html += `<td>${val === null || val === undefined ? '' : val}</td>`;
         });
         html += '</tr>';
@@ -346,17 +347,21 @@ function showSurvivalDistribution() {
     trainData.forEach(row => {
         if (row.Sex && row.Survived !== undefined) {
             const sex = row.Sex.toLowerCase();
-            survivalBySex[sex].total++;
-            if (row.Survived === 1) {
-                survivalBySex[sex].survived++;
+            if (survivalBySex[sex]) {
+                survivalBySex[sex].total++;
+                if (row.Survived === 1) {
+                    survivalBySex[sex].survived++;
+                }
             }
         }
         
         if (row.Pclass && row.Survived !== undefined) {
             const pclass = row.Pclass.toString();
-            survivalByClass[pclass].total++;
-            if (row.Survived === 1) {
-                survivalByClass[pclass].survived++;
+            if (survivalByClass[pclass]) {
+                survivalByClass[pclass].total++;
+                if (row.Survived === 1) {
+                    survivalByClass[pclass].survived++;
+                }
             }
         }
     });
@@ -473,18 +478,18 @@ function processDataset(data, isTraining) {
     
     if (isTraining) {
         // Calculate actual medians and mode from training data
-        const ages = data.map(row => row.Age).filter(age => age !== null && age !== undefined);
-        const fares = data.map(row => row.Fare).filter(fare => fare !== null && fare !== undefined);
+        const ages = data.map(row => row.Age).filter(age => age !== null && age !== undefined && !isNaN(age));
+        const fares = data.map(row => row.Fare).filter(fare => fare !== null && fare !== undefined && !isNaN(fare));
         const embarked = data.map(row => row.Embarked).filter(e => e !== null && e !== undefined);
         
         if (ages.length > 0) {
-            ages.sort((a, b) => a - b);
-            ageMedian = ages[Math.floor(ages.length / 2)];
+            const sortedAges = [...ages].sort((a, b) => a - b);
+            ageMedian = sortedAges[Math.floor(sortedAges.length / 2)];
         }
         
         if (fares.length > 0) {
-            fares.sort((a, b) => a - b);
-            fareMedian = fares[Math.floor(fares.length / 2)];
+            const sortedFares = [...fares].sort((a, b) => a - b);
+            fareMedian = sortedFares[Math.floor(sortedFares.length / 2)];
         }
         
         if (embarked.length > 0) {
@@ -496,6 +501,8 @@ function processDataset(data, isTraining) {
                 embarkedCount[a] > embarkedCount[b] ? a : b
             );
         }
+        
+        console.log('Imputation values - Age median:', ageMedian, 'Fare median:', fareMedian, 'Embarked mode:', embarkedMode);
     }
     
     // Process each row
@@ -513,7 +520,7 @@ function processDataset(data, isTraining) {
             let value = row[col];
             
             // Impute missing values
-            if (value === null || value === undefined || value === '') {
+            if (value === null || value === undefined || value === '' || isNaN(value)) {
                 if (col === 'Age') value = ageMedian;
                 else if (col === 'Fare') value = fareMedian;
                 else value = 0;
@@ -522,8 +529,7 @@ function processDataset(data, isTraining) {
             featureRow.push(value);
         });
         
-        // Handle categorical features with one-hot encoding placeholders
-        // We'll do actual one-hot encoding after collecting all data
+        // Handle categorical features
         CATEGORICAL_COLS.forEach(col => {
             let value = row[col];
             
@@ -553,23 +559,21 @@ function processDataset(data, isTraining) {
         features.push(featureRow);
         
         // Extract label if training data
-        if (isTraining && row[TARGET_COL] !== undefined) {
+        if (isTraining && row[TARGET_COL] !== undefined && row[TARGET_COL] !== null) {
             labels.push(row[TARGET_COL]);
         }
     });
     
     // Convert to tensors
     let featuresTensor = tf.tensor2d(features.map(row => {
-        // Convert categorical values to numerical indices for one-hot encoding
+        // Convert categorical values to numerical indices
         return row.map((val, idx) => {
             // First NUMERICAL_COLS.length values are already numeric
             if (idx < NUMERICAL_COLS.length) {
                 return val;
             }
             
-            // Categorical values need to be converted
-            // For simplicity in this demo, we'll use simple encoding
-            // In a full implementation, you would use proper one-hot encoding
+            // Categorical values need to be converted to numerical indices
             if (typeof val === 'string') {
                 if (val === 'female') return 1;
                 if (val === 'male') return 0;
@@ -695,15 +699,11 @@ async function trainModel() {
         validationData = valFeatures;
         validationLabels = valLabels;
         
-        // Create tfjs-vis callback for live training plots
-        const container = document.getElementById('trainingHistory');
-        const metrics = ['loss', 'val_loss', 'acc', 'val_acc'];
-        
         // Train the model
         const history = await model.fit(trainFeatures, trainLabels, {
             epochs: 50,
             batchSize: 32,
-            validationSplit: 0.2,
+            validationData: [valFeatures, valLabels],
             callbacks: {
                 onEpochEnd: async (epoch, logs) => {
                     // Store training history
@@ -720,6 +720,7 @@ async function trainModel() {
                         `Epoch ${epoch + 1}/50 - Loss: ${logs.loss.toFixed(4)}, Acc: ${logs.acc.toFixed(4)}, Val Loss: ${logs.val_loss.toFixed(4)}, Val Acc: ${logs.val_acc.toFixed(4)}`);
                     
                     // Create simple training history visualization
+                    const container = document.getElementById('trainingHistory');
                     if (container) {
                         let html = '<div style="display: flex; flex-wrap: wrap; gap: 20px;">';
                         
@@ -730,8 +731,8 @@ async function trainModel() {
                         
                         const maxLoss = Math.max(...trainingHistory.map(h => Math.max(h.loss, h.val_loss)));
                         trainingHistory.forEach((h, idx) => {
-                            const lossHeight = (h.loss / maxLoss) * 180;
-                            const valLossHeight = (h.val_loss / maxLoss) * 180;
+                            const lossHeight = maxLoss > 0 ? (h.loss / maxLoss) * 180 : 0;
+                            const valLossHeight = maxLoss > 0 ? (h.val_loss / maxLoss) * 180 : 0;
                             
                             html += `<div style="position: absolute; bottom: 0; left: ${idx * 10}px; width: 8px; height: ${lossHeight}px; background: #1a2980;"></div>`;
                             html += `<div style="position: absolute; bottom: 0; left: ${idx * 10 + 4}px; width: 8px; height: ${valLossHeight}px; background: #26d0ce;"></div>`;
@@ -886,12 +887,16 @@ function calculateFeatureImportance() {
         const container = document.getElementById('featureImportance');
         let html = '';
         
-        featureImportancePairs.forEach(pair => {
-            html += '<div class="feature-bar">';
-            html += `<div class="feature-name">${pair.name}</div>`;
-            html += `<div class="feature-bar-value" style="width: ${pair.importance * 3}px;">${pair.importance.toFixed(1)}%</div>`;
-            html += '</div>';
-        });
+        if (featureImportancePairs.length === 0) {
+            html = '<p>No feature importance data available.</p>';
+        } else {
+            featureImportancePairs.forEach(pair => {
+                html += '<div class="feature-bar">';
+                html += `<div class="feature-name">${pair.name}</div>`;
+                html += `<div class="feature-bar-value" style="width: ${pair.importance * 3}px;">${pair.importance.toFixed(1)}%</div>`;
+                html += '</div>';
+            });
+        }
         
         container.innerHTML = html;
         
@@ -989,9 +994,10 @@ function calculateMetrics(labels, predictions, threshold) {
     }
     
     // Calculate metrics
-    const accuracy = (tp + tn) / (tp + fp + tn + fn);
-    const precision = tp > 0 ? tp / (tp + fp) : 0;
-    const recall = tp > 0 ? tp / (tp + fn) : 0;
+    const total = tp + fp + tn + fn;
+    const accuracy = total > 0 ? (tp + tn) / total : 0;
+    const precision = (tp + fp) > 0 ? tp / (tp + fp) : 0;
+    const recall = (tp + fn) > 0 ? tp / (tp + fn) : 0;
     const f1 = (precision + recall) > 0 ? 2 * (precision * recall) / (precision + recall) : 0;
     
     // Calculate AUC (simplified)
@@ -1023,6 +1029,10 @@ function calculateAUC(labels, scores) {
     // Calculate true positive rate and false positive rate at different thresholds
     const totalPos = labels.filter(label => label === 1).length;
     const totalNeg = labels.filter(label => label === 0).length;
+    
+    if (totalPos === 0 || totalNeg === 0) {
+        return 0.5; // Random classifier
+    }
     
     let tpr = [0]; // True Positive Rate
     let fpr = [0]; // False Positive Rate
@@ -1082,8 +1092,8 @@ function createROCCurve(labels, predictions) {
             else if (actual === 1 && predicted === 0) fn++;
         }
         
-        const tpr = tp / (tp + fn) || 0;
-        const fpr = fp / (fp + tn) || 0;
+        const tpr = (tp + fn) > 0 ? tp / (tp + fn) : 0;
+        const fpr = (fp + tn) > 0 ? fp / (fp + tn) : 0;
         
         rocPoints.push({ fpr, tpr, threshold });
     });
@@ -1127,7 +1137,8 @@ function createROCCurve(labels, predictions) {
     // Add labels
     html += `<text x="${width/2}" y="${height-10}" text-anchor="middle" font-size="12">False Positive Rate</text>`;
     html += `<text x="10" y="15" text-anchor="start" font-size="12">True Positive Rate</text>`;
-    html += `<text x="${width-10}" y="15" text-anchor="end" font-size="12">AUC: ${calculateAUC(labelsArray, predsArray).toFixed(3)}</text>`;
+    const aucValue = calculateAUC(labelsArray, predsArray).toFixed(3);
+    html += `<text x="${width-10}" y="15" text-anchor="end" font-size="12">AUC: ${aucValue}</text>`;
     
     html += '</svg>';
     
@@ -1155,12 +1166,29 @@ function updateThreshold() {
         
         // Update confusion matrix in evaluation table
         const tableContainer = document.getElementById('evaluationTable');
-        if (tableContainer.innerHTML) {
+        if (tableContainer && tableContainer.innerHTML) {
             // Update confusion matrix part
             let html = tableContainer.innerHTML;
-            const confusionMatrixRegex = /<td><strong>Actual Negative<\/strong><\/td><td>(\d+)<\/td><td>(\d+)<\/td>[\s\S]*?<td><strong>Actual Positive<\/strong><\/td><td>(\d+)<\/td><td>(\d+)<\/td>/;
-            html = html.replace(confusionMatrixRegex, 
-                `<td><strong>Actual Negative</strong></td><td>${metrics.confusionMatrix.tn}</td><td>${metrics.confusionMatrix.fp}</td></tr><tr><td><strong>Actual Positive</strong></td><td>${metrics.confusionMatrix.fn}</td><td>${metrics.confusionMatrix.tp}</td>`);
+            
+            // Create a simple update by replacing the entire table
+            html = '<table>';
+            html += '<thead><tr><th>Metric</th><th>Value</th><th>Description</th></tr></thead>';
+            html += '<tbody>';
+            html += `<tr><td>Accuracy</td><td>${metrics.accuracy.toFixed(4)}</td><td>Overall correctness</td></tr>`;
+            html += `<tr><td>Precision</td><td>${metrics.precision.toFixed(4)}</td><td>True positives / (True positives + False positives)</td></tr>`;
+            html += `<tr><td>Recall</td><td>${metrics.recall.toFixed(4)}</td><td>True positives / (True positives + False negatives)</td></tr>`;
+            html += `<tr><td>F1 Score</td><td>${metrics.f1.toFixed(4)}</td><td>Harmonic mean of precision and recall</td></tr>`;
+            html += `<tr><td>AUC</td><td>${metrics.auc.toFixed(4)}</td><td>Area under ROC curve</td></tr>`;
+            html += '</tbody></table>';
+            
+            // Add confusion matrix
+            html += '<h3 style="margin-top: 20px;">Confusion Matrix</h3>';
+            html += '<table>';
+            html += '<thead><tr><th></th><th>Predicted Negative</th><th>Predicted Positive</th></tr></thead>';
+            html += '<tbody>';
+            html += `<tr><td><strong>Actual Negative</strong></td><td>${metrics.confusionMatrix.tn}</td><td>${metrics.confusionMatrix.fp}</td></tr>`;
+            html += `<tr><td><strong>Actual Positive</strong></td><td>${metrics.confusionMatrix.fn}</td><td>${metrics.confusionMatrix.tp}</td></tr>`;
+            html += '</tbody></table>';
             
             tableContainer.innerHTML = html;
         }
