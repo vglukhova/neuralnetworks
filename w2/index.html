@@ -23,7 +23,7 @@
         }
         
         .container {
-            max-width: 1400px;
+            max-width: 900px;
             margin: 0 auto;
         }
         
@@ -49,7 +49,7 @@
         
         .workflow {
             display: flex;
-            flex-wrap: wrap;
+            flex-direction: column;
             gap: 20px;
             margin-bottom: 30px;
         }
@@ -59,8 +59,7 @@
             border-radius: 10px;
             padding: 25px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
-            flex: 1;
-            min-width: 300px;
+            width: 100%;
             transition: transform 0.3s ease;
         }
         
@@ -244,8 +243,8 @@
         }
         
         .charts-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            display: flex;
+            flex-direction: column;
             gap: 20px;
             margin: 20px 0;
         }
@@ -255,62 +254,102 @@
             border-radius: 10px;
             padding: 20px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+            width: 100%;
         }
         
-        .feature-importance {
-            margin: 20px 0;
+        .feature-importance-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .feature-item {
+            display: flex;
+            align-items: center;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 12px 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            border-left: 4px solid #1a2980;
+        }
+        
+        .feature-name-col {
+            width: 140px;
+            font-weight: bold;
+            color: #333;
+            text-align: right;
+            padding-right: 15px;
+            font-size: 14px;
+        }
+        
+        .feature-bar-container {
+            flex: 1;
+            height: 24px;
+            background: #e0e0e0;
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+            margin-right: 15px;
         }
         
         .feature-bar {
-    display: flex;
-    align-items: center;
-    margin: 8px 0;
-}
-
-        .feature-name {
-    width: 120px;
-    font-weight: bold;
-    text-align: right;
-    padding-right: 10px;
-}
-
-        .feature-bar-container {
-    flex: 1;
-    height: 24px;
-    background: #e0e0e0;
-    border-radius: 4px;
-    overflow: visible;
-    position: relative;
-    min-width: 100px;
-}
-
-        .feature-bar-value {
-    height: 100%;
-    background: linear-gradient(to right, #26d0ce, #1a2980);
-    border-radius: 4px;
-    min-width: 30px; /* Minimum width so small percentages are visible */
-    position: relative;
-}
-
+            height: 100%;
+            background: linear-gradient(to right, #26d0ce, #1a2980);
+            border-radius: 12px;
+            min-width: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 10px;
+            transition: width 0.5s ease;
+        }
+        
         .feature-percentage {
-    width: 60px;
-    text-align: left;
-    padding-left: 10px;
-    font-weight: bold;
-    color: #333;
-}
+            width: 80px;
+            text-align: left;
+            font-weight: bold;
+            color: #1a2980;
+            font-size: 15px;
+            min-width: 80px;
+        }
+        
+        .feature-value {
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+            text-shadow: 1px 1px 1px rgba(0,0,0,0.3);
+        }
+        
+        footer {
+            margin-top: 40px;
+            padding: 20px;
+            text-align: center;
+            color: #666;
+            border-top: 1px solid #ddd;
+            font-size: 0.9rem;
+        }
         
         @media (max-width: 768px) {
-            .workflow {
+            .button-group {
                 flex-direction: column;
             }
             
-            .card {
-                min-width: 100%;
+            button {
+                width: 100%;
             }
             
-            .charts-container {
-                grid-template-columns: 1fr;
+            .file-input {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .file-input label {
+                margin-bottom: 5px;
+            }
+            
+            input[type="file"] {
+                width: 100%;
             }
         }
     </style>
@@ -322,105 +361,101 @@
             <p class="subtitle">A shallow binary classifier using TensorFlow.js running entirely in the browser</p>
         </header>
         
-        <div class="workflow">
-            <!-- Data Load Section -->
-            <div class="card">
-                <h2><i class="fas fa-database"></i> 1. Data Load</h2>
-                <div class="file-inputs">
-                    <div class="file-input">
-                        <label for="trainFile">Training Data:</label>
-                        <input type="file" id="trainFile" accept=".csv" />
-                    </div>
-                    <div class="file-input">
-                        <label for="testFile">Test Data:</label>
-                        <input type="file" id="testFile" accept=".csv" />
-                    </div>
+        <!-- Data Load Section -->
+        <div class="card">
+            <h2><i class="fas fa-database"></i> 1. Data Load</h2>
+            <div class="file-inputs">
+                <div class="file-input">
+                    <label for="trainFile">Training Data:</label>
+                    <input type="file" id="trainFile" accept=".csv" />
                 </div>
-                <div class="button-group">
-                    <button id="loadDataBtn">
-                        <i class="fas fa-upload"></i> Load CSV Files
-                    </button>
-                    <button id="loadSampleBtn">
-                        <i class="fas fa-vial"></i> Load Sample Data
-                    </button>
+                <div class="file-input">
+                    <label for="testFile">Test Data:</label>
+                    <input type="file" id="testFile" accept=".csv" />
                 </div>
-                <div id="dataStatus" class="status"></div>
             </div>
-            
-            <!-- Preprocessing Section -->
-            <div class="card">
-                <h2><i class="fas fa-cogs"></i> 2. Preprocessing</h2>
-                <p>Features: Pclass, Sex, Age, SibSp, Parch, Fare, Embarked</p>
-                <p>Target: Survived (0/1)</p>
-                <div class="button-group">
-                    <button id="preprocessBtn" disabled>
-                        <i class="fas fa-filter"></i> Preprocess Data
-                    </button>
-                </div>
-                <div id="preprocessStatus" class="status"></div>
+            <div class="button-group">
+                <button id="loadDataBtn">
+                    <i class="fas fa-upload"></i> Load CSV Files
+                </button>
+                <button id="loadSampleBtn">
+                    <i class="fas fa-vial"></i> Load Sample Data
+                </button>
             </div>
-            
-            <!-- Model Section -->
-            <div class="card">
-                <h2><i class="fas fa-network-wired"></i> 3. Model</h2>
-                <p>Architecture: Dense(16, relu) → Dense(1, sigmoid)</p>
-                <div class="button-group">
-                    <button id="createModelBtn" disabled>
-                        <i class="fas fa-layer-group"></i> Create Model
-                    </button>
-                </div>
-                <div id="modelStatus" class="status"></div>
-            </div>
+            <div id="dataStatus" class="status"></div>
         </div>
         
-        <div class="workflow">
-            <!-- Training Section -->
-            <div class="card">
-                <h2><i class="fas fa-running"></i> 4. Training</h2>
-                <p>80/20 stratified split, 50 epochs, batch size 32</p>
-                <div class="button-group">
-                    <button id="trainBtn" disabled>
-                        <i class="fas fa-play"></i> Train Model
-                    </button>
-                    <button id="stopTrainBtn" disabled>
-                        <i class="fas fa-stop"></i> Stop Training
-                    </button>
-                </div>
-                <div id="trainingStatus" class="status"></div>
+        <!-- Preprocessing Section -->
+        <div class="card">
+            <h2><i class="fas fa-cogs"></i> 2. Preprocessing</h2>
+            <p>Features: Pclass, Sex, Age, SibSp, Parch, Fare, Embarked</p>
+            <p>Target: Survived (0/1)</p>
+            <div class="button-group">
+                <button id="preprocessBtn" disabled>
+                    <i class="fas fa-filter"></i> Preprocess Data
+                </button>
             </div>
-            
-            <!-- Metrics Section -->
-            <div class="card">
-                <h2><i class="fas fa-chart-line"></i> 5. Metrics</h2>
-                <div class="slider-container">
-                    <div class="slider-label">
-                        <span>Classification Threshold: <span id="thresholdValue">0.5</span></span>
-                        <span>Adjust for ROC-AUC</span>
-                    </div>
-                    <input type="range" id="thresholdSlider" min="0" max="1" step="0.01" value="0.5" disabled />
-                </div>
-                <div class="button-group">
-                    <button id="evaluateBtn" disabled>
-                        <i class="fas fa-chart-bar"></i> Evaluate Model
-                    </button>
-                </div>
-                <div id="evaluationTable"></div>
-                <div id="evaluationStatus" class="status"></div>
+            <div id="preprocessStatus" class="status"></div>
+        </div>
+        
+        <!-- Model Section -->
+        <div class="card">
+            <h2><i class="fas fa-network-wired"></i> 3. Model</h2>
+            <p>Architecture: Dense(16, relu) → Dense(1, sigmoid)</p>
+            <div class="button-group">
+                <button id="createModelBtn" disabled>
+                    <i class="fas fa-layer-group"></i> Create Model
+                </button>
             </div>
-            
-            <!-- Prediction & Export Section -->
-            <div class="card">
-                <h2><i class="fas fa-file-export"></i> 6. Prediction & Export</h2>
-                <div class="button-group">
-                    <button id="predictBtn" disabled>
-                        <i class="fas fa-bolt"></i> Predict on Test Data
-                    </button>
-                    <button id="exportBtn" disabled>
-                        <i class="fas fa-download"></i> Export Model
-                    </button>
-                </div>
-                <div id="exportStatus" class="status"></div>
+            <div id="modelStatus" class="status"></div>
+        </div>
+        
+        <!-- Training Section -->
+        <div class="card">
+            <h2><i class="fas fa-running"></i> 4. Training</h2>
+            <p>80/20 stratified split, 50 epochs, batch size 32</p>
+            <div class="button-group">
+                <button id="trainBtn" disabled>
+                    <i class="fas fa-play"></i> Train Model
+                </button>
+                <button id="stopTrainBtn" disabled>
+                    <i class="fas fa-stop"></i> Stop Training
+                </button>
             </div>
+            <div id="trainingStatus" class="status"></div>
+        </div>
+        
+        <!-- Metrics Section -->
+        <div class="card">
+            <h2><i class="fas fa-chart-line"></i> 5. Metrics</h2>
+            <div class="slider-container">
+                <div class="slider-label">
+                    <span>Classification Threshold: <span id="thresholdValue">0.5</span></span>
+                    <span>Adjust for ROC-AUC</span>
+                </div>
+                <input type="range" id="thresholdSlider" min="0" max="1" step="0.01" value="0.5" disabled />
+            </div>
+            <div class="button-group">
+                <button id="evaluateBtn" disabled>
+                    <i class="fas fa-chart-bar"></i> Evaluate Model
+                </button>
+            </div>
+            <div id="evaluationTable"></div>
+            <div id="evaluationStatus" class="status"></div>
+        </div>
+        
+        <!-- Prediction & Export Section -->
+        <div class="card">
+            <h2><i class="fas fa-file-export"></i> 6. Prediction & Export</h2>
+            <div class="button-group">
+                <button id="predictBtn" disabled>
+                    <i class="fas fa-bolt"></i> Predict on Test Data
+                </button>
+                <button id="exportBtn" disabled>
+                    <i class="fas fa-download"></i> Export Model
+                </button>
+            </div>
+            <div id="exportStatus" class="status"></div>
         </div>
         
         <!-- Charts Container -->
