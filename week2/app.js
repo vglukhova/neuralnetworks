@@ -162,8 +162,12 @@ function setupEventListeners() {
  */
 function updateStatus(elementId, type, message) {
     const element = document.getElementById(elementId);
-    element.textContent = message;
-    element.className = `status ${type}`;
+    if (element) {
+        element.textContent = message;
+        element.className = `status ${type}`;
+    } else {
+        console.warn(`Status element not found: ${elementId}`);
+    }
 }
 
 /**
@@ -973,10 +977,12 @@ function stopTraining() {
 async function calculateFeatureImportance() {
     if (!model) {
         console.error('No model available for feature importance calculation');
+        updateStatus('featureImportanceStatus', 'error', 'No model available. Please train a model first.');
         return;
     }
     
     try {
+        updateStatus('featureImportanceStatus', 'info', 'Calculating feature importance using Sigmoid Gate...');
         console.log('Calculating feature importance using SIGMOID GATE...');
         
         // Get feature names
@@ -999,15 +1005,18 @@ async function calculateFeatureImportance() {
             console.log(`  Layer ${idx}: ${layer.name} (${layer.getClassName()})`);
         });
         
-        // METHOD 1: Use SIGMOID GATE weights (primary method)
+        // Use SIGMOID GATE weights (primary method)
         console.log('Using SIGMOID GATE for feature importance...');
         const importanceScores = await calculateImportanceFromSigmoidGate(featureNames);
         
         // Display the results
         displaySigmoidGateImportance(importanceScores, featureNames);
         
+        updateStatus('featureImportanceStatus', 'success', 'Feature importance calculated successfully!');
+        
     } catch (error) {
         console.error('Error in sigmoid gate feature importance:', error);
+        updateStatus('featureImportanceStatus', 'error', `Error: ${error.message}`);
         displayFeatureImportanceError(error);
     }
 }
@@ -1083,6 +1092,7 @@ async function calculateImportanceFromSigmoidGate(featureNames) {
                 importanceScores.push({
                     name: featureNames[featureIdx],
                     importance: 0,
+                    rawInfluence: 0,
                     explanation: 'Weight matrix dimension mismatch'
                 });
                 continue;
@@ -1104,7 +1114,7 @@ async function calculateImportanceFromSigmoidGate(featureNames) {
                     
                     // Calculate the influence chain: feature → hidden → gate → output
                     // Apply sigmoid to gate activation to simulate the gating effect
-                    const gateActivation = Math.tanh(weightHiddenToGate); // Approximation of sigmoid
+                    const gateActivation = 1 / (1 + Math.exp(-weightHiddenToGate)); // Sigmoid activation
                     const influence = Math.abs(weightToHidden * gateActivation * weightGateToOutput);
                     
                     totalInfluence += influence;
@@ -1176,8 +1186,11 @@ function displaySigmoidGateImportance(importanceScores, featureNames) {
     if (!importanceScores || importanceScores.length === 0) {
         html = '<div class="status error">No feature importance data available.</div>';
         container.innerHTML = html;
+        updateStatus('featureImportanceStatus', 'error', 'No feature importance data available.');
         return;
     }
+    
+    updateStatus('featureImportanceStatus', 'success', `Found ${importanceScores.length} features with varying importance.`);
     
     console.log('Displaying', importanceScores.length, 'importance scores');
     
@@ -1287,6 +1300,9 @@ function displaySigmoidGateImportance(importanceScores, featureNames) {
  */
 function displayFeatureImportanceError(error) {
     const container = document.getElementById('featureImportance');
+    
+    // Update status
+    updateStatus('featureImportanceStatus', 'error', `Calculation failed: ${error.message}`);
     
     const html = `
         <div class="status error" style="margin-bottom: 20px;">
