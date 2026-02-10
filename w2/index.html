@@ -7,378 +7,104 @@
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-vis@latest"></script>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            margin: 0;
-            padding: 20px;
-            color: #333;
-            background-color: #f5f7fa;
-        }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background-color: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        h1 {
-            color: #1a73e8;
-            text-align: center;
-            border-bottom: 3px solid #1a73e8;
-            padding-bottom: 10px;
-        }
-        h2 {
-            color: #1a73e8;
-            border-left: 4px solid #1a73e8;
-            padding-left: 10px;
-            margin-top: 30px;
-        }
-        section {
-            margin-bottom: 30px;
-            padding: 20px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            background-color: #fff;
-        }
-        button {
-            background-color: #1a73e8;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            margin: 5px;
-            font-weight: bold;
-            transition: background-color 0.3s;
-        }
-        button:hover {
-            background-color: #0d62c9;
-        }
-        button:disabled {
-            background-color: #ccc;
-            cursor: not-allowed;
-        }
-        .file-inputs {
-            display: flex;
-            gap: 20px;
-            margin: 15px 0;
-        }
-        .file-input {
-            flex: 1;
-        }
-        .status-box {
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 4px;
-            background-color: #e8f4fd;
-            border-left: 4px solid #1a73e8;
-        }
-        .status-box.success {
-            background-color: #e7f7e7;
-            border-left-color: #28a745;
-        }
-        .status-box.error {
-            background-color: #fdeaea;
-            border-left-color: #dc3545;
-        }
-        .evaluation-table {
-            display: table !important;
-            visibility: visible !important;
-            width: 100%;
-            border-collapse: collapse;
-            margin: 15px 0;
-        }
-        .evaluation-table td, .evaluation-table th {
-            border: 1px solid #ddd;
-            padding: 12px;
-            text-align: center;
-        }
-        .evaluation-table th {
-            background-color: #1a73e8;
-            color: white;
-            font-weight: bold;
-        }
-        .evaluation-table tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
-        .metrics-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin: 20px 0;
-        }
-        .metric-card {
-            border: 1px solid #ddd;
-            padding: 20px;
-            border-radius: 5px;
-            background-color: #fff;
-        }
-        .slider-container {
-            margin: 20px 0;
-            padding: 15px;
-            background-color: #f8f9fa;
-            border-radius: 5px;
-        }
-        .slider-label {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 10px;
-            font-weight: bold;
-        }
-        input[type="range"] {
-            width: 100%;
-            height: 8px;
-            border-radius: 5px;
-            background: #ddd;
-            outline: none;
-        }
-        .importance-bar {
-            height: 20px;
-            background-color: #1a73e8;
-            border-radius: 3px;
-            margin: 5px 0;
-            transition: width 0.5s;
-        }
-        .importance-container {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .progress-bar {
-            height: 20px;
-            background-color: #1a73e8;
-            border-radius: 5px;
-            width: 0%;
-            transition: width 0.3s;
-            margin: 10px 0;
-        }
-        .data-preview {
-            overflow-x: auto;
-            margin: 15px 0;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-        table {
-            border-collapse: collapse;
-            width: 100%;
-        }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-        }
-        th {
-            background-color: #f2f2f2;
-            position: sticky;
-            top: 0;
-        }
-        .note-box {
-            background-color: #fffde7;
-            padding: 15px;
-            border-radius: 5px;
-            border-left: 5px solid #f1c40f;
-            margin: 20px 0;
-        }
-        .toggle-container {
-            margin: 15px 0;
-            padding: 10px;
-            background-color: #f8f9fa;
-            border-radius: 5px;
-        }
-        .toggle-label {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            cursor: pointer;
-        }
-        @media (max-width: 768px) {
-            .file-inputs {
-                flex-direction: column;
-            }
-            .metrics-grid {
-                grid-template-columns: 1fr;
-            }
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6; max-width: 1200px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+        .container { background: white; border-radius: 12px; padding: 30px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        h2 { color: #1a73e8; margin-bottom: 20px; font-size: 1.5em; }
+        .file-inputs { display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
+        input[type="file"] { padding: 8px 12px; border: 2px dashed #ddd; border-radius: 6px; background: #fafafa; }
+        button { background: #1a73e8; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; transition: background 0.2s; }
+        button:hover { background: #1557b0; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-group { display: flex; gap: 10px; flex-wrap: wrap; margin: 20px 0; }
+        .metrics-section { display: flex; gap: 20px; flex-direction: column; }
+        .slider-container { margin: 20px 0; }
+        table { border-collapse: collapse; width: 100%; margin: 15px 0; display: block !important; visibility: visible !important; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: center; }
+        th { background: #f8f9fa; font-weight: 600; }
+        .preview-table { max-height: 300px; overflow: auto; }
+        #evaluation-table { display: none; }
+        #evaluation-table.show { display: table !important; visibility: visible !important; }
+        .status { padding: 12px; margin: 15px 0; border-radius: 6px; background: #e8f4fd; border-left: 4px solid #1a73e8; }
+        .error { background: #fee; border-left-color: #dc3545; }
+        #vis-container { height: 400px; margin: 20px 0; }
+        @media (max-width: 768px) { .file-inputs, .btn-group { flex-direction: column; } .metrics-section { flex-direction: column; } }
+        .deployment-note { background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 6px; margin-top: 20px; font-size: 14px; }
     </style>
 </head>
 <body>
+    <h1>🚢 Titanic Survival Classifier - TensorFlow.js</h1>
+    
     <div class="container">
-        <h1>🚢 Titanic Survival Classifier with TensorFlow.js</h1>
-        <p class="note-box">Complete browser-based binary classifier. All processing happens in your browser - no server needed!</p>
-        
-        <!-- 1. Data Load Section -->
-        <section id="data-load">
-            <h2>1. Data Load</h2>
-            <p>Upload the training and test CSV files from the Titanic dataset:</p>
-            
-            <div class="file-inputs">
-                <div class="file-input">
-                    <label for="train-file"><strong>Training Data (train.csv):</strong></label><br>
-                    <input type="file" id="train-file" accept=".csv" style="width: 100%; padding: 8px; margin: 5px 0;">
-                </div>
-                <div class="file-input">
-                    <label for="test-file"><strong>Test Data (test.csv):</strong></label><br>
-                    <input type="file" id="test-file" accept=".csv" style="width: 100%; padding: 8px; margin: 5px 0;">
-                </div>
-            </div>
-            
-            <button id="load-data-btn">Load & Inspect Data</button>
-            
-            <div id="data-status" class="status-box">
-                Waiting for CSV files...
-            </div>
-            
-            <div id="data-preview-container" style="display: none;">
-                <h3>Data Preview</h3>
-                <div id="data-preview" class="data-preview"></div>
-                <div id="data-stats"></div>
-            </div>
-        </section>
+        <h2>📁 Data Load</h2>
+        <div class="file-inputs">
+            <input type="file" id="train-file" accept=".csv" />
+            <input type="file" id="test-file" accept=".csv" />
+        </div>
+        <div id="data-status"></div>
+        <div id="preview-container" style="display: none;">
+            <h3>Data Preview</h3>
+            <div class="preview-table"><table id="preview-table"></table></div>
+        </div>
+    </div>
 
-        <!-- 2. Preprocessing Section -->
-        <section id="preprocessing">
-            <h2>2. Preprocessing</h2>
-            <div class="toggle-container">
-                <div class="toggle-label">
-                    <input type="checkbox" id="family-features-toggle" checked>
-                    <span><strong>Add Family Features:</strong> FamilySize (SibSp + Parch + 1) and IsAlone (FamilySize == 1)</span>
-                </div>
-            </div>
-            
+    <div class="container">
+        <h2>🔧 Preprocessing</h2>
+        <div class="btn-group">
             <button id="preprocess-btn" disabled>Preprocess Data</button>
-            
-            <div id="preprocessing-output" class="status-box">
-                Load data first to enable preprocessing
-            </div>
-        </section>
+        </div>
+        <div id="preprocess-status"></div>
+    </div>
 
-        <!-- 3. Model Section -->
-        <section id="model">
-            <h2>3. Model Setup</h2>
-            <button id="create-model-btn" disabled>Create Model</button>
-            
-            <div id="model-summary" style="display: none;">
-                <h3>Model Architecture</h3>
-                <div id="model-details"></div>
-            </div>
-        </section>
+    <div class="container">
+        <h2>🧠 Model & Feature Importance</h2>
+        <div class="btn-group">
+            <button id="build-model-btn" disabled>Build Model</button>
+            <button id="show-importance-btn" disabled>Show Feature Importance</button>
+        </div>
+        <div id="model-status"></div>
+        <div id="vis-container"></div>
+    </div>
 
-        <!-- 4. Training Section -->
-        <section id="training">
-            <h2>4. Training</h2>
-            
-            <div class="progress-bar" id="training-progress"></div>
-            
-            <div>
-                <button id="train-btn" disabled>Train Model (50 epochs)</button>
-                <button id="stop-train-btn" disabled style="background-color: #dc3545;">Stop Training</button>
-            </div>
-            
-            <div id="training-status" class="status-box">
-                Create model first to enable training
-            </div>
-            
-            <div id="training-charts" style="display: none;">
-                <h3>Training Charts</h3>
-                <p>Loss and accuracy charts will appear during training</p>
-            </div>
-        </section>
+    <div class="container">
+        <h2>⚡ Training</h2>
+        <div class="btn-group">
+            <button id="train-btn" disabled>Train Model</button>
+        </div>
+        <div id="train-status"></div>
+        <div id="vis-container-training"></div>
+    </div>
 
-        <!-- 5. Evaluation Section -->
-        <section id="metrics">
-            <h2>5. Evaluation & Feature Importance</h2>
-            
-            <div class="slider-container">
-                <div class="slider-label">
-                    <span>Classification Threshold: <span id="threshold-value">0.5</span></span>
-                    <span>Adjust to update confusion matrix and metrics</span>
-                </div>
-                <input type="range" id="threshold-slider" class="slider" min="0" max="1" step="0.01" value="0.5" disabled>
-            </div>
-            
-            <div class="metrics-grid">
-                <div class="metric-card">
-                    <h3>Confusion Matrix</h3>
-                    <div id="confusion-matrix">
-                        <p>Train model first to see confusion matrix</p>
-                    </div>
-                </div>
-                
-                <div class="metric-card">
-                    <h3>Performance Metrics</h3>
-                    <div id="performance-metrics">
-                        <p>Train model first to see metrics</p>
-                    </div>
-                </div>
-                
-                <div class="metric-card">
-                    <h3>ROC/AUC Metrics</h3>
-                    <button id="show-roc-btn" disabled>Show ROC Curve</button>
-                    <div id="auc-metrics" style="margin-top: 15px;">
-                        <p>AUC will be calculated after training</p>
-                    </div>
-                </div>
-                
-                <div class="metric-card">
-                    <h3>Top 5 Feature Importance (Sigmoid Gate)</h3>
-                    <p><small>Importance = sigmoid(W * standardized_feature_range)</small></p>
-                    <div id="feature-importance">
-                        <p>Feature importance will be calculated after training</p>
-                    </div>
-                </div>
-            </div>
-            
-            <div id="evaluation-status" class="status-box"></div>
-        </section>
+    <div class="container">
+        <h2>📊 Metrics & Evaluation</h2>
+        <div class="btn-group">
+            <button id="evaluate-btn" disabled>Evaluate</button>
+        </div>
+        <div class="slider-container">
+            <label>Threshold: <span id="threshold-val">0.5</span></label>
+            <input type="range" id="threshold-slider" min="0" max="1" step="0.01" value="0.5">
+        </div>
+        <div id="metrics-status"></div>
+        <table id="evaluation-table">
+            <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+            <tbody id="metrics-tbody"></tbody>
+        </table>
+        <div id="vis-container-roc"></div>
+    </div>
 
-        <!-- 6. Prediction Section -->
-        <section id="prediction">
-            <h2>6. Prediction</h2>
-            <button id="predict-btn" disabled>Predict on Test Data</button>
-            
-            <div id="prediction-output" class="status-box">
-                Train model first to make predictions
-            </div>
-            
-            <div id="prediction-preview" style="display: none;">
-                <h3>Prediction Preview (First 10 rows)</h3>
-                <div id="prediction-table"></div>
-            </div>
-        </section>
+    <div class="container">
+        <h2>🔮 Prediction & Export</h2>
+        <div class="btn-group">
+            <button id="predict-btn" disabled>Predict Test Set</button>
+        </div>
+        <div id="predict-status"></div>
+    </div>
 
-        <!-- 7. Export Section -->
-        <section id="export">
-            <h2>7. Export Results</h2>
-            <div>
-                <button id="export-submission-btn" disabled>Export Submission CSV</button>
-                <button id="export-probabilities-btn" disabled>Export Probabilities CSV</button>
-                <button id="save-model-btn" disabled>Save Model</button>
-            </div>
-            
-            <div id="export-status" class="status-box">
-                Make predictions first to export results
-            </div>
-        </section>
-
-        <!-- Deployment Notes -->
-        <section id="deployment">
-            <h2>📋 Deployment Notes</h2>
-            <div class="note-box">
-                <p><strong>To deploy this application on GitHub Pages:</strong></p>
-                <ol>
-                    <li>Create a public GitHub repository</li>
-                    <li>Commit <code>index.html</code> and <code>app.js</code> to the repository</li>
-                    <li>Go to repository Settings → Pages → Source: select "main" branch, root folder</li>
-                    <li>Click Save - your app will be available at: <code>https://[username].github.io/[repository]/</code></li>
-                    <li>Test the URL and ensure CSV exports work correctly</li>
-                </ol>
-                <p><strong>CSV Compatibility:</strong> All exported CSV fields are double-quoted to prevent parsing issues in Excel/Google Sheets.</p>
-            </div>
-        </section>
+    <div class="deployment-note">
+        <strong>🚀 Deployment:</strong> Create public GitHub repo, commit index.html/app.js, enable Pages (main/root), test URL. Check browser console for CSV parsing/feature gate debug info.
     </div>
 
     <script src="app.js"></script>
 </body>
 </html>
+
