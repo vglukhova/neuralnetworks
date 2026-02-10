@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neural Network Design: The Gradient Puzzle</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.19.0/dist/tf.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: #0f172a;
+            color: #e2e8f0;
+            line-height: 1.6;
+            padding: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #334155;
+        }
+
+        h1 {
+            color: #38bdf8;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        h2 {
+            color: #7dd3fc;
+            font-size: 1.5rem;
+            margin-top: 25px;
+            margin-bottom: 15px;
+        }
+
+        .subtitle {
+            color: #94a3b8;
+            font-size: 1.1rem;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .controls {
+            background: #1e293b;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: background 0.2s;
+            min-width: 120px;
+        }
+
+        button:hover {
+            background: #2563eb;
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+        button#autoTrain {
+            background: #10b981;
+        }
+
+        button#autoTrain:hover {
+            background: #059669;
+        }
+
+        button#autoTrain.running {
+            background: #ef4444;
+        }
+
+        button#autoTrain.running:hover {
+            background: #dc2626;
+        }
+
+        button#reset {
+            background: #f59e0b;
+        }
+
+        button#reset:hover {
+            background: #d97706;
+        }
+
+        .architecture-selector {
+            background: #334155;
+            padding: 15px;
+            border-radius: 8px;
+            margin-left: auto;
+        }
+
+        .architecture-selector label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #cbd5e1;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 15px;
+        }
+
+        .radio-group div {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        input[type="radio"] {
+            accent-color: #3b82f6;
+            width: 18px;
+            height: 18px;
+        }
+
+        .canvas-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        .canvas-box {
+            background: #1e293b;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .canvas-box h3 {
+            margin-bottom: 15px;
+            color: #7dd3fc;
+            font-size: 1.3rem;
+        }
+
+        canvas {
+            background: #0f172a;
+            border-radius: 5px;
+            image-rendering: pixelated;
+            border: 1px solid #334155;
+            width: 256px;
+            height: 256px;
+        }
+
+        .status {
+            background: #1e293b;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            min-height: 150px;
+            max-height: 300px;
+            overflow-y: auto;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .status h3 {
+            color: #7dd3fc;
+            margin-bottom: 10px;
+        }
+
+        .loss-info {
+            display: flex;
+            gap: 20px;
+            margin-top: 10px;
+        }
+
+        .loss-item {
+            padding: 8px 15px;
+            border-radius: 6px;
+            background: #334155;
+        }
+
+        .baseline-loss {
+            border-left: 4px solid #3b82f6;
+        }
+
+        .student-loss {
+            border-left: 4px solid #10b981;
+        }
+
+        .error {
+            color: #f87171;
+            margin-top: 10px;
+        }
+
+        .instructions {
+            background: #1e293b;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            border-radius: 0 8px 8px 0;
+            margin-bottom: 25px;
+            font-size: 0.95rem;
+        }
+
+        .instructions h3 {
+            color: #fbbf24;
+            margin-bottom: 10px;
+        }
+
+        .instructions ul {
+            padding-left: 20px;
+            margin-top: 8px;
+        }
+
+        .instructions li {
+            margin-bottom: 5px;
+        }
+
+        .todo-note {
+            color: #fbbf24;
+            font-weight: 600;
+        }
+
+        @media (max-width: 1100px) {
+            .canvas-container {
+                grid-template-columns: 1fr;
+                max-width: 400px;
+                margin-left: auto;
+                margin-right: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Neural Network Design: The Gradient Puzzle</h1>
+        <p class="subtitle">Neural networks as projection machines • The loss function defines the "rule of the game" • Modify student model code to implement custom losses and architectures</p>
+    </header>
+
+    <section class="instructions">
+        <h3>🎯 Student Instructions</h3>
+        <p>This demo shows two identical neural networks trained on the same 16×16 noise input. The baseline uses MSE loss. Your task: edit <strong>app.js</strong> to implement:</p>
+        <ul>
+            <li><span class="todo-note">TODO-A</span>: Three projection architectures (compression/transformation/expansion) in <code>createStudentModel()</code></li>
+            <li><span class="todo-note">TODO-B</span>: Custom loss with smoothness + direction penalties using coefficients: <code>smoothnessCoeff = 0.18</code> and <code>directionCoeff = 0.09</code></li>
+            <li><span class="todo-note">TODO-C</span>: Observe how loss components affect the output structure</li>
+        </ul>
+        <p>Select architecture below (student model only) and compare outputs visually and numerically.</p>
+    </section>
+
+    <div class="controls">
+        <button id="trainStep">Train 1 Step</button>
+        <button id="autoTrain">Auto Train</button>
+        <button id="reset">Reset Weights</button>
+
+        <div class="architecture-selector">
+            <label>Student Model Architecture:</label>
+            <div class="radio-group">
+                <div>
+                    <input type="radio" id="compression" name="arch" value="compression" checked>
+                    <label for="compression">Compression</label>
+                </div>
+                <div>
+                    <input type="radio" id="transformation" name="arch" value="transformation">
+                    <label for="transformation">Transformation</label>
+                </div>
+                <div>
+                    <input type="radio" id="expansion" name="arch" value="expansion">
+                    <label for="expansion">Expansion</label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="canvas-container">
+        <div class="canvas-box">
+            <h3>Input (Fixed Noise)</h3>
+            <canvas id="inputCanvas" width="16" height="16"></canvas>
+            <p>16×16 fixed input tensor</p>
+        </div>
+        <div class="canvas-box">
+            <h3>Baseline Output (MSE Loss)</h3>
+            <canvas id="baselineCanvas" width="16" height="16"></canvas>
+            <p>Baseline model with standard MSE</p>
+        </div>
+        <div class="canvas-box">
+            <h3>Student Output (Custom Loss)</h3>
+            <canvas id="studentCanvas" width="16" height="16"></canvas>
+            <p>Student model - modify in app.js</p>
+        </div>
+    </div>
+
+    <div class="status">
+        <h3>Training Status & Log</h3>
+        <div class="loss-info">
+            <div class="loss-item baseline-loss">
+                <strong>Baseline Loss:</strong> <span id="baselineLoss">-</span>
+            </div>
+            <div class="loss-item student-loss">
+                <strong>Student Loss:</strong> <span id="studentLoss">-</span>
+            </div>
+        </div>
+        <p><strong>Training Step:</strong> <span id="stepCount">0</span></p>
+        <p><strong>Architecture:</strong> <span id="archDisplay">compression</span></p>
+        <div id="errorLog"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
