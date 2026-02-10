@@ -381,8 +381,13 @@ function showDataStatistics() {
 }
 
 // Analyze data and create visualizations
+// Analyze data and create visualizations
 function analyzeData() {
     if (!rawTrainData || rawTrainData.length === 0) return;
+    
+    // Clear existing charts
+    document.getElementById('survivalBySexChart').innerHTML = '';
+    document.getElementById('survivalByClassChart').innerHTML = '';
     
     // Calculate survival rate by sex
     const survivalBySex = {};
@@ -412,42 +417,50 @@ function analyzeData() {
         if (survived === 1) survivalByClass[pclass].survived++;
     });
     
-    // Create survival by sex chart
+    // Create survival by sex chart data
     const sexData = Object.keys(survivalBySex).map(sex => {
-        const rate = survivalBySex[sex].survived / survivalBySex[sex].total;
-        return { x: sex, y: rate * 100 };
+        const rate = (survivalBySex[sex].survived / survivalBySex[sex].total) * 100;
+        return { 
+            index: sex === 'male' ? 0 : 1, // Sort order
+            x: sex, 
+            y: rate 
+        };
+    }).sort((a, b) => a.index - b.index);
+    
+    // Create survival by class chart data
+    const classData = Object.keys(survivalByClass).sort().map(pclass => {
+        const rate = (survivalByClass[pclass].survived / survivalByClass[pclass].total) * 100;
+        return { 
+            x: `Class ${pclass}`, 
+            y: rate 
+        };
     });
     
-    const sexChartData = {
-        values: sexData,
-        series: ['Survival Rate %']
-    };
-    
+    // Render survival by sex chart
     tfvis.render.barchart(
-        { tab: 'Visualization', name: 'Survival by Sex' },
-        sexData,
+        document.getElementById('survivalBySexChart'),
+        { values: sexData },
         {
             xLabel: 'Sex',
             yLabel: 'Survival Rate %',
-            height: 300
+            height: 300,
+            width: document.getElementById('survivalBySexChart').offsetWidth || 400
         }
     );
     
-    // Create survival by class chart
-    const classData = Object.keys(survivalByClass).map(pclass => {
-        const rate = survivalByClass[pclass].survived / survivalByClass[pclass].total;
-        return { x: `Class ${pclass}`, y: rate * 100 };
-    });
-    
+    // Render survival by class chart
     tfvis.render.barchart(
-        { tab: 'Visualization', name: 'Survival by Passenger Class' },
-        classData,
+        document.getElementById('survivalByClassChart'),
+        { values: classData },
         {
             xLabel: 'Passenger Class',
             yLabel: 'Survival Rate %',
-            height: 300
+            height: 300,
+            width: document.getElementById('survivalByClassChart').offsetWidth || 400
         }
     );
+    
+    console.log('Charts rendered:', sexData, classData);
 }
 
 // ============================================================================
