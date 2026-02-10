@@ -264,13 +264,20 @@ function loadSampleData() {
         {PassengerId: 2, Survived: 1, Pclass: 1, Name: 'Cumings, Mrs. John Bradley', Sex: 'female', Age: 38, SibSp: 1, Parch: 0, Ticket: 'PC 17599', Fare: 71.28, Cabin: 'C85', Embarked: 'C'},
         {PassengerId: 3, Survived: 1, Pclass: 3, Name: 'Heikkinen, Miss. Laina', Sex: 'female', Age: 26, SibSp: 0, Parch: 0, Ticket: 'STON/O2. 3101282', Fare: 7.92, Cabin: null, Embarked: 'S'},
         {PassengerId: 4, Survived: 1, Pclass: 1, Name: 'Futrelle, Mrs. Jacques Heath', Sex: 'female', Age: 35, SibSp: 1, Parch: 0, Ticket: '113803', Fare: 53.1, Cabin: 'C123', Embarked: 'S'},
-        {PassengerId: 5, Survived: 0, Pclass: 3, Name: 'Allen, Mr. William Henry', Sex: 'male', Age: 35, SibSp: 0, Parch: 0, Ticket: '373450', Fare: 8.05, Cabin: null, Embarked: 'S'}
+        {PassengerId: 5, Survived: 0, Pclass: 3, Name: 'Allen, Mr. William Henry', Sex: 'male', Age: 35, SibSp: 0, Parch: 0, Ticket: '373450', Fare: 8.05, Cabin: null, Embarked: 'S'},
+        {PassengerId: 6, Survived: 0, Pclass: 3, Name: 'Moran, Mr. James', Sex: 'male', Age: null, SibSp: 0, Parch: 0, Ticket: '330877', Fare: 8.46, Cabin: null, Embarked: 'Q'},
+        {PassengerId: 7, Survived: 0, Pclass: 1, Name: 'McCarthy, Mr. Timothy J', Sex: 'male', Age: 54, SibSp: 0, Parch: 0, Ticket: '17463', Fare: 51.86, Cabin: 'E46', Embarked: 'S'},
+        {PassengerId: 8, Survived: 0, Pclass: 3, Name: 'Palsson, Master. Gosta Leonard', Sex: 'male', Age: 2, SibSp: 3, Parch: 1, Ticket: '349909', Fare: 21.08, Cabin: null, Embarked: 'S'},
+        {PassengerId: 9, Survived: 1, Pclass: 3, Name: 'Johnson, Mrs. Oscar W', Sex: 'female', Age: 27, SibSp: 0, Parch: 2, Ticket: '347742', Fare: 11.13, Cabin: null, Embarked: 'S'},
+        {PassengerId: 10, Survived: 1, Pclass: 2, Name: 'Nasser, Mrs. Nicholas', Sex: 'female', Age: 14, SibSp: 1, Parch: 0, Ticket: '237736', Fare: 30.07, Cabin: null, Embarked: 'C'}
     ];
     
     const sampleTestData = [
         {PassengerId: 892, Pclass: 3, Name: 'Kelly, Mr. James', Sex: 'male', Age: 34.5, SibSp: 0, Parch: 0, Ticket: '330911', Fare: 7.83, Cabin: null, Embarked: 'Q'},
         {PassengerId: 893, Pclass: 3, Name: 'Wilkes, Mrs. James', Sex: 'female', Age: 47, SibSp: 1, Parch: 0, Ticket: '363272', Fare: 7, Cabin: null, Embarked: 'S'},
-        {PassengerId: 894, Pclass: 2, Name: 'Myles, Mr. Thomas Francis', Sex: 'male', Age: 62, SibSp: 0, Parch: 0, Ticket: '240276', Fare: 9.69, Cabin: null, Embarked: 'Q'}
+        {PassengerId: 894, Pclass: 2, Name: 'Myles, Mr. Thomas Francis', Sex: 'male', Age: 62, SibSp: 0, Parch: 0, Ticket: '240276', Fare: 9.69, Cabin: null, Embarked: 'Q'},
+        {PassengerId: 895, Pclass: 3, Name: 'Wirz, Mr. Albert', Sex: 'male', Age: 27, SibSp: 0, Parch: 0, Ticket: '315154', Fare: 8.66, Cabin: null, Embarked: 'S'},
+        {PassengerId: 896, Pclass: 3, Name: 'Hirvonen, Mrs. Alexander', Sex: 'female', Age: 22, SibSp: 1, Parch: 1, Ticket: '3101298', Fare: 12.29, Cabin: null, Embarked: 'S'}
     ];
     
     trainData = sampleTrainData;
@@ -391,10 +398,10 @@ function showSurvivalDistribution() {
     });
     
     // Create HTML visualization
-    let html = '<div style="display: flex; flex-wrap: wrap; gap: 20px;">';
+    let html = '<div style="display: flex; flex-direction: column; gap: 20px;">';
     
     // Sex survival chart
-    html += '<div style="flex: 1; min-width: 250px;">';
+    html += '<div>';
     html += '<h4>Survival by Sex</h4>';
     sexData.forEach(item => {
         html += `<p style="margin: 8px 0;"><strong>${item.sex}:</strong> ${item.survivalRate}% survived (${item.count} passengers)</p>`;
@@ -405,7 +412,7 @@ function showSurvivalDistribution() {
     html += '</div>';
     
     // Class survival chart
-    html += '<div style="flex: 1; min-width: 250px;">';
+    html += '<div>';
     html += '<h4>Survival by Passenger Class</h4>';
     classData.forEach(item => {
         html += `<p style="margin: 8px 0;"><strong>${item.class}:</strong> ${item.survivalRate}% survived (${item.count} passengers)</p>`;
@@ -722,10 +729,10 @@ async function trainModel() {
                     // Create simple training history visualization
                     const container = document.getElementById('trainingHistory');
                     if (container) {
-                        let html = '<div style="display: flex; flex-wrap: wrap; gap: 20px;">';
+                        let html = '<div style="display: flex; flex-direction: column; gap: 20px;">';
                         
                         // Loss chart
-                        html += '<div style="flex: 1; min-width: 300px;">';
+                        html += '<div>';
                         html += '<h4>Training & Validation Loss</h4>';
                         html += '<div style="height: 200px; position: relative; border: 1px solid #ddd; border-radius: 5px; padding: 10px;">';
                         
@@ -734,8 +741,8 @@ async function trainModel() {
                             const lossHeight = maxLoss > 0 ? (h.loss / maxLoss) * 180 : 0;
                             const valLossHeight = maxLoss > 0 ? (h.val_loss / maxLoss) * 180 : 0;
                             
-                            html += `<div style="position: absolute; bottom: 0; left: ${idx * 10}px; width: 8px; height: ${lossHeight}px; background: #1a2980;"></div>`;
-                            html += `<div style="position: absolute; bottom: 0; left: ${idx * 10 + 4}px; width: 8px; height: ${valLossHeight}px; background: #26d0ce;"></div>`;
+                            html += `<div style="position: absolute; bottom: 0; left: ${idx * 15}px; width: 12px; height: ${lossHeight}px; background: #1a2980;"></div>`;
+                            html += `<div style="position: absolute; bottom: 0; left: ${idx * 15 + 6}px; width: 12px; height: ${valLossHeight}px; background: #26d0ce;"></div>`;
                         });
                         
                         html += '</div>';
@@ -746,7 +753,7 @@ async function trainModel() {
                         html += '</div>';
                         
                         // Accuracy chart
-                        html += '<div style="flex: 1; min-width: 300px;">';
+                        html += '<div>';
                         html += '<h4>Training & Validation Accuracy</h4>';
                         html += '<div style="height: 200px; position: relative; border: 1px solid #ddd; border-radius: 5px; padding: 10px;">';
                         
@@ -754,8 +761,8 @@ async function trainModel() {
                             const accHeight = h.acc * 180;
                             const valAccHeight = h.val_acc * 180;
                             
-                            html += `<div style="position: absolute; bottom: 0; left: ${idx * 10}px; width: 8px; height: ${accHeight}px; background: #1a2980;"></div>`;
-                            html += `<div style="position: absolute; bottom: 0; left: ${idx * 10 + 4}px; width: 8px; height: ${valAccHeight}px; background: #26d0ce;"></div>`;
+                            html += `<div style="position: absolute; bottom: 0; left: ${idx * 15}px; width: 12px; height: ${accHeight}px; background: #1a2980;"></div>`;
+                            html += `<div style="position: absolute; bottom: 0; left: ${idx * 15 + 6}px; width: 12px; height: ${valAccHeight}px; background: #26d0ce;"></div>`;
                         });
                         
                         html += '</div>';
@@ -883,6 +890,9 @@ function calculateFeatureImportance() {
         // Sort by importance (descending)
         featureImportancePairs.sort((a, b) => b.importance - a.importance);
         
+        // Find maximum importance for scaling
+        const maxImportance = Math.max(...featureImportancePairs.map(p => p.importance));
+        
         // Display feature importance
         const container = document.getElementById('featureImportance');
         let html = '';
@@ -890,17 +900,18 @@ function calculateFeatureImportance() {
         if (featureImportancePairs.length === 0) {
             html = '<p>No feature importance data available.</p>';
         } else {
-            html += '<div style="margin-top: 10px;">';
+            html += '<div class="feature-importance-grid">';
             
             featureImportancePairs.forEach(pair => {
-                // Ensure minimum width for very small percentages
-                const displayWidth = Math.max(pair.importance, 2);
+                // Calculate width percentage (at least 10% for visibility)
+                const barWidth = maxImportance > 0 ? 
+                    Math.max((pair.importance / maxImportance) * 90, 10) : 10;
                 
-                html += '<div class="feature-bar">';
-                html += `<div class="feature-name">${pair.name}</div>`;
+                html += '<div class="feature-item">';
+                html += `<div class="feature-name-col">${pair.name}</div>`;
                 html += '<div class="feature-bar-container">';
-                html += `<div class="feature-bar-value" style="width: ${displayWidth}%;">`;
-                html += `<span style="position: absolute; right: 5px; color: white; font-weight: bold; line-height: 24px;">${pair.importance.toFixed(1)}%</span>`;
+                html += `<div class="feature-bar" style="width: ${barWidth}%;">`;
+                html += `<span class="feature-value">${pair.importance.toFixed(1)}%</span>`;
                 html += '</div>';
                 html += '</div>';
                 html += `<div class="feature-percentage">${pair.importance.toFixed(1)}%</div>`;
@@ -915,7 +926,7 @@ function calculateFeatureImportance() {
     } catch (error) {
         console.error('Error calculating feature importance:', error);
         const container = document.getElementById('featureImportance');
-        container.innerHTML = `<p style="color: #721c24;">Error calculating feature importance: ${error.message}</p>`;
+        container.innerHTML = `<div class="status error">Error calculating feature importance: ${error.message}</div>`;
     }
 }
 
