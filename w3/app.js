@@ -13,10 +13,11 @@ const xInput = tf.tidy(() =>
     tf.randomUniform([1, 16, 16, 1], -1, 1).clone()
 );
 
-// Generated coefficients for custom loss - USE THESE EXACT VALUES
-// TODO-B: Implement custom loss using these coefficients
-const smoothnessCoeff = 0.18; // Between 0.05 and 0.3
-const directionCoeff = 0.09;  // Between 0.02 and 0.15
+// ========== TODO-B: CUSTOM LOSS COEFFICIENTS ==========
+// Use these exact values in studentLoss() below
+const smoothnessCoeff = 0.18; // between 0.05 and 0.3
+const directionCoeff = 0.09;  // between 0.02 and 0.15
+// =====================================================
 
 // ====================
 // Model Creation
@@ -122,14 +123,14 @@ function createStudentModel(archType = 'compression') {
         return model;
     }
     
-    // TODO-A: Add transformation architecture (same input/output size)
+    // ---------- TODO-A: TRANSFORMATION ARCHITECTURE ----------
     if (archType === 'transformation') {
         // Student task: design a network that transforms without compression
         // Example: series of conv layers with stride 1, same padding
         throw new Error('Transformation architecture not implemented yet - see TODO-A');
     }
     
-    // TODO-A: Add expansion architecture (output larger than input)
+    // ---------- TODO-A: EXPANSION ARCHITECTURE ----------
     if (archType === 'expansion') {
         // Student task: design a network that outputs larger than 16x16
         // Example: use transpose conv with stride > 1
@@ -151,11 +152,17 @@ function mse(yTrue, yPred) {
 /** Smoothness penalty (total variation style) */
 function smoothness(yPred) {
     return tf.tidy(() => {
-        // Calculate differences between neighboring pixels
-        const diffX = yPred.slice([0, 0, 0, 0], [1, 15, 16, 1])
-                         .sub(yPred.slice([0, 1, 0, 0], [1, 15, 16, 1]));
-        const diffY = yPred.slice([0, 0, 0, 0], [1, 16, 15, 1])
-                         .sub(yPred.slice([0, 0, 1, 0], [1, 16, 15, 1]));
+        // Calculate differences between neighboring pixels (valid only if width/height >=2)
+        const batchSize = yPred.shape[0];
+        const height = yPred.shape[1];
+        const width = yPred.shape[2];
+        
+        // Horizontal differences
+        const diffX = yPred.slice([0, 0, 0, 0], [batchSize, height, width-1, 1])
+                         .sub(yPred.slice([0, 0, 1, 0], [batchSize, height, width-1, 1]));
+        // Vertical differences
+        const diffY = yPred.slice([0, 0, 0, 0], [batchSize, height-1, width, 1])
+                         .sub(yPred.slice([0, 1, 0, 0], [batchSize, height-1, width, 1]));
         
         return diffX.square().mean().add(diffY.square().mean());
     });
@@ -164,18 +171,19 @@ function smoothness(yPred) {
 /** Direction penalty (encourage left-dark / right-bright gradient) */
 function directionX(yPred) {
     return tf.tidy(() => {
-        const shape = yPred.shape;
-        const width = shape[2];
+        const batch = yPred.shape[0];
+        const height = yPred.shape[1];
+        const width = yPred.shape[2];
         
-        // Create coordinate tensor: -1 at left, +1 at right
+        // Create coordinate tensor: -1 at left, +1 at right, tiled to batch×height
         const coords = tf.linspace(-1, 1, width).reshape([1, 1, width, 1]);
-        const targetGradient = coords; // Ideal pattern
+        const tiledCoords = tf.tile(coords, [batch, height, 1, 1]);
         
         // Compare each pixel's value to its ideal position-based value
-        const meanVal = yPred.mean(); // Center around mean
+        const meanVal = yPred.mean(); // center around mean
         const centered = yPred.sub(meanVal);
         
-        return centered.sub(targetGradient).square().mean();
+        return centered.sub(tiledCoords).square().mean();
     });
 }
 
@@ -186,16 +194,19 @@ function directionX(yPred) {
  */
 function studentLoss(yTrue, yPred) {
     return tf.tidy(() => {
+        // ---------- START TODO-B ----------
+        // Current implementation: only MSE (no custom terms)
         const mseLoss = mse(yTrue, yPred);
         
-        // TODO-B: Implement custom loss with smoothness and direction penalties
-        // Currently only MSE - add the two regularization terms
+        // ---- UNCOMMENT AND MODIFY THE LINES BELOW ----
         // const smoothLoss = smoothness(yPred);
         // const dirLoss = directionX(yPred);
-        // return mseLoss.add(smoothLoss.mul(smoothnessCoeff))
-        //              .add(dirLoss.mul(directionCoeff));
+        // return mseLoss
+        //     .add(smoothLoss.mul(smoothnessCoeff))
+        //     .add(dirLoss.mul(directionCoeff));
+        // ---------- END TODO-B ----------
         
-        return mseLoss; // Replace with custom loss
+        return mseLoss; // Replace with custom loss when you uncomment above
     });
 }
 
@@ -271,28 +282,24 @@ function updateVisualizations() {
 }
 
 // ====================
-// Training Loop
+// Training Loop (Fixed)
 // ====================
 
-/** Single training step */
+/** Single training step — no manual varList, let minimize handle it */
 function trainStep() {
     try {
         tf.tidy(() => {
-            // Track variables for gradient computation
-            const baselineVars = baselineModel.trainableWeights;
-            const studentVars = studentModel.trainableWeights;
-            
             // Baseline training (MSE only)
             optimizer.minimize(() => {
                 const pred = baselineModel.predict(xInput);
                 return mse(xInput, pred);
-            }, true, baselineVars);
+            });
             
             // Student training (custom loss)
             optimizer.minimize(() => {
                 const pred = studentModel.predict(xInput);
                 return studentLoss(xInput, pred);
-            }, true, studentVars);
+            });
         });
         
         stepCount++;
