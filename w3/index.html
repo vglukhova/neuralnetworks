@@ -32,8 +32,6 @@
         text-align: center;
         font-weight: 300;
       }
-
-      /* Control Panel */
       .controls {
         background-color: var(--card-bg);
         padding: 15px 25px;
@@ -57,7 +55,6 @@
         border-right: none;
         padding-right: 0;
       }
-
       button {
         padding: 8px 16px;
         border: none;
@@ -85,13 +82,10 @@
         background-color: var(--warning);
         color: #333;
       }
-
       label {
         margin-right: 8px;
         cursor: pointer;
       }
-
-      /* Visualization Grid */
       .grid-container {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
@@ -119,10 +113,9 @@
         color: #aaa;
         margin-bottom: 10px;
       }
-
       canvas {
         border: 2px solid #555;
-        image-rendering: pixelated; /* Sharp pixels */
+        image-rendering: pixelated;
         width: 256px;
         height: 256px;
         background-color: black;
@@ -133,8 +126,6 @@
         font-size: 0.9em;
         color: var(--success);
       }
-
-      /* Logs */
       #log-area {
         width: 100%;
         max-width: 1000px;
@@ -151,8 +142,6 @@
       .error {
         color: var(--danger);
       }
-
-      /* Architecture Selection Highlight */
       .arch-selector input[type="radio"]:checked + span {
         color: var(--accent);
         font-weight: bold;
@@ -168,7 +157,6 @@
         <button id="btn-auto" class="btn-auto">Auto Train (Start)</button>
         <button id="btn-reset" class="btn-reset">Reset Weights</button>
       </div>
-
       <div class="control-group arch-selector">
         <strong>Architecture:</strong>
         <label
@@ -187,23 +175,18 @@
     </div>
 
     <div class="grid-container">
-      <!-- Card 1: Input -->
       <div class="card">
         <h3>Input (Noise)</h3>
         <p>Fixed Random Noise<br />[16x16]</p>
         <canvas id="canvas-input" width="16" height="16"></canvas>
         <div class="loss-display">-</div>
       </div>
-
-      <!-- Card 2: Baseline -->
       <div class="card">
         <h3>Baseline Output</h3>
         <p>Model: Fixed Compression<br />Loss: MSE Only</p>
         <canvas id="canvas-baseline" width="16" height="16"></canvas>
         <div id="loss-baseline" class="loss-display">Loss: 0.0000</div>
       </div>
-
-      <!-- Card 3: Student -->
       <div class="card" style="border: 2px solid var(--accent)">
         <h3>Student Output</h3>
         <p>
@@ -215,9 +198,7 @@
       </div>
     </div>
 
-    <div id="log-area">
-      Ready. Select architecture or edit app.js to customize logic...
-    </div>
+    <div id="log-area">Initializing...</div>
 
     <script src="app.js"></script>
   </body>
