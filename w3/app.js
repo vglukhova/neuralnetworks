@@ -152,7 +152,7 @@ function mse(yTrue, yPred) {
 /** Smoothness penalty (total variation style) */
 function smoothness(yPred) {
     return tf.tidy(() => {
-        // Calculate differences between neighboring pixels (valid only if width/height >=2)
+        // Calculate differences between neighboring pixels
         const batchSize = yPred.shape[0];
         const height = yPred.shape[1];
         const width = yPred.shape[2];
@@ -180,7 +180,7 @@ function directionX(yPred) {
         const tiledCoords = tf.tile(coords, [batch, height, 1, 1]);
         
         // Compare each pixel's value to its ideal position-based value
-        const meanVal = yPred.mean(); // center around mean
+        const meanVal = yPred.mean();
         const centered = yPred.sub(meanVal);
         
         return centered.sub(tiledCoords).square().mean();
@@ -216,6 +216,14 @@ function studentLoss(yTrue, yPred) {
 const baselineModel = createBaselineModel();
 let studentModel = createStudentModel('compression');
 const optimizer = tf.train.adam(0.01);
+
+// Verify that model weights are accessible (for varList)
+if (!Array.isArray(baselineModel.trainableWeights) || baselineModel.trainableWeights.length === 0) {
+    console.warn('Baseline model has no trainable weights!');
+}
+if (!Array.isArray(studentModel.trainableWeights) || studentModel.trainableWeights.length === 0) {
+    console.warn('Student model has no trainable weights!');
+}
 
 // ====================
 // UI Elements
@@ -256,7 +264,6 @@ function renderTensorToCanvas(tensor, canvas) {
             imageData.data[i * 4 + 3] = 255; // A
         }
         
-        // Scale up for display
         ctx.putImageData(imageData, 0, 0);
     });
 }
@@ -285,22 +292,30 @@ function updateVisualizations() {
 // Training Loop (Fixed)
 // ====================
 
-/** Single training step — no manual varList, let minimize handle it */
+/** Single training step — each minimize updates only its own model's weights */
 function trainStep() {
     try {
-        tf.tidy(() => {
-            // Baseline training (MSE only)
-            optimizer.minimize(() => {
+        // --- Baseline model update (MSE only) ---
+        // Use varList to restrict updates to baseline's weights only
+        optimizer.minimize(
+            () => {
                 const pred = baselineModel.predict(xInput);
                 return mse(xInput, pred);
-            });
-            
-            // Student training (custom loss)
-            optimizer.minimize(() => {
+            },
+            undefined,  // returnCost (we don't need it)
+            baselineModel.trainableWeights  // varList: only baseline variables
+        );
+        
+        // --- Student model update (custom loss) ---
+        // Use varList to restrict updates to student's weights only
+        optimizer.minimize(
+            () => {
                 const pred = studentModel.predict(xInput);
                 return studentLoss(xInput, pred);
-            });
-        });
+            },
+            undefined,
+            studentModel.trainableWeights
+        );
         
         stepCount++;
         updateVisualizations();
