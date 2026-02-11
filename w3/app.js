@@ -1,14 +1,13 @@
 /**
  * Neural Network Design: The Gradient Puzzle
  * ===========================================
- * FINAL – BROADCAST ERROR ELIMINATED
+ * COMPLETE – AUTO TRAINING FIXED
  *
- * - All student architectures fully implemented
+ * - Student architectures fully implemented (compression, transformation, expansion)
  * - Custom loss: MSE + smoothness*0.01 + direction*0.1
- * - Gradient tape isolated using tf.gradients with explicit varList
- * - No variableGrads → no accidental cross‑model gradient leakage
- * - Optimizers recreated after each architecture change
- * - Input canvas always visible
+ * - NO BROADCAST ERRORS: tf.grads with explicit varList, optimizers recreated on reset
+ * - AUTO TRAINING: recursive async loop with await trainStep()
+ * - INPUT CANVAS: always shows noise (await toPixels)
  */
 
 // ==========================================
@@ -18,7 +17,7 @@ const CONFIG = {
   inputShapeModel: [16, 16, 1],
   inputShapeData: [1, 16, 16, 1],
   learningRate: 0.05,
-  autoTrainSpeed: 50,
+  autoTrainDelay: 50, // ms between steps
   lambdaSmooth: 0.01,
   lambdaDir: 0.1,
 };
@@ -26,7 +25,7 @@ const CONFIG = {
 let state = {
   step: 0,
   isAutoTraining: false,
-  trainingInProgress: false, // lock to prevent overlapping resets
+  autoTrainTimer: null,
   xInput: null,
   baselineModel: null,
   studentModel: null,
@@ -82,11 +81,11 @@ function createStudentModel(archType) {
     model.add(tf.layers.dense({ units: 64, activation: "relu" }));
     model.add(tf.layers.dense({ units: 256, activation: "sigmoid" }));
   } else if (archType === "transformation") {
-    // --- COMPLETED: 1:1 mapping (input dimension = 256) ---
+    // 1:1 mapping – hidden layer = 256 (same as input)
     model.add(tf.layers.dense({ units: 256, activation: "relu" }));
     model.add(tf.layers.dense({ units: 256, activation: "sigmoid" }));
   } else if (archType === "expansion") {
-    // --- COMPLETED: Overcomplete (expand to 512) ---
+    // Overcomplete – expand to 512, then project back
     model.add(tf.layers.dense({ units: 512, activation: "relu" }));
     model.add(tf.layers.dense({ units: 256, activation: "sigmoid" }));
   } else {
@@ -111,72 +110,62 @@ function studentLoss(yTrue, yPred) {
 }
 
 // ==========================================
-// 5. Training Step – NO BROADCAST ERRORS
+// 5. Training Step – CLEAN & ISOLATED
 // ==========================================
 
 async function trainStep() {
-  // Prevent overlapping training steps and resets
-  if (state.trainingInProgress) return;
-  state.trainingInProgress = true;
+  if (!state.baselineModel || !state.studentModel) {
+    log("Models not initialized.", true);
+    return;
+  }
 
+  state.step++;
+
+  // ----- Baseline update (MSE only) -----
+  const baselineLossVal = tf.tidy(() => {
+    const vars = state.baselineModel.trainableWeights;
+    const lossFn = () => {
+      const yPred = state.baselineModel.predict(state.xInput);
+      return mse(state.xInput, yPred);
+    };
+    const grads = tf.grads(lossFn);
+    const gradValues = grads(vars);
+    state.baselineOptimizer.applyGradients(
+      gradValues.map((g, i) => ({ name: vars[i].name, tensor: g }))
+    );
+    return lossFn().dataSync()[0];
+  });
+
+  // ----- Student update (custom loss) -----
+  let studentLossVal = 0;
   try {
-    if (!state.baselineModel || !state.studentModel) {
-      log("Models not initialized.", true);
-      return;
-    }
-
-    state.step++;
-
-    // ----- Baseline update (MSE only) -----
-    const baselineLossVal = tf.tidy(() => {
-      const vars = state.baselineModel.trainableWeights;
-      const loss = () => {
-        const yPred = state.baselineModel.predict(state.xInput);
-        return mse(state.xInput, yPred);
+    studentLossVal = tf.tidy(() => {
+      const vars = state.studentModel.trainableWeights;
+      const lossFn = () => {
+        const yPred = state.studentModel.predict(state.xInput);
+        return studentLoss(state.xInput, yPred);
       };
-      const grads = tf.grads(loss);
+      const grads = tf.grads(lossFn);
       const gradValues = grads(vars);
-      state.baselineOptimizer.applyGradients(gradValues.map((g, i) => ({
-        name: vars[i].name,
-        tensor: g
-      })));
-      return loss().dataSync()[0];
+      state.studentOptimizer.applyGradients(
+        gradValues.map((g, i) => ({ name: vars[i].name, tensor: g }))
+      );
+      return lossFn().dataSync()[0];
     });
 
-    // ----- Student update (custom loss) – ISOLATED TAPE -----
-    let studentLossVal = 0;
-    try {
-      studentLossVal = tf.tidy(() => {
-        const vars = state.studentModel.trainableWeights;
-        const loss = () => {
-          const yPred = state.studentModel.predict(state.xInput);
-          return studentLoss(state.xInput, yPred);
-        };
-        const grads = tf.grads(loss);
-        const gradValues = grads(vars);
-        state.studentOptimizer.applyGradients(gradValues.map((g, i) => ({
-          name: vars[i].name,
-          tensor: g
-        })));
-        return loss().dataSync()[0];
-      });
+    log(
+      `Step ${state.step}: Base Loss=${baselineLossVal.toFixed(4)} | Student Loss=${studentLossVal.toFixed(4)}`
+    );
+  } catch (e) {
+    log(`Student training error: ${e.message}`, true);
+    stopAutoTrain();
+    return;
+  }
 
-      log(
-        `Step ${state.step}: Base Loss=${baselineLossVal.toFixed(4)} | Student Loss=${studentLossVal.toFixed(4)}`
-      );
-    } catch (e) {
-      log(`Student training error: ${e.message}`, true);
-      stopAutoTrain();
-      return;
-    }
-
-    // Update display
-    if (state.step % 5 === 0 || !state.isAutoTraining) {
-      await render();
-      updateLossDisplay(baselineLossVal, studentLossVal);
-    }
-  } finally {
-    state.trainingInProgress = false;
+  // Update display every 5 steps or immediately for manual steps
+  if (state.step % 5 === 0 || !state.isAutoTraining) {
+    await render();
+    updateLossDisplay(baselineLossVal, studentLossVal);
   }
 }
 
@@ -216,18 +205,14 @@ function log(msg, isError = false) {
 }
 
 // ==========================================
-// 7. Reset & Initialization (thread‑safe)
+// 7. Reset & Initialization
 // ==========================================
 
 async function resetModels(archType = null) {
-  // Wait for any ongoing training to finish
-  while (state.trainingInProgress) {
-    await tf.nextFrame();
-  }
-
-  if (typeof archType !== "string") archType = null;
+  // Stop auto training before reset
   if (state.isAutoTraining) stopAutoTrain();
 
+  if (typeof archType !== "string") archType = null;
   if (!archType) {
     const checked = document.querySelector('input[name="arch"]:checked');
     archType = checked ? checked.value : "compression";
@@ -239,17 +224,17 @@ async function resetModels(archType = null) {
   if (state.baselineOptimizer) state.baselineOptimizer.dispose();
   if (state.studentOptimizer) state.studentOptimizer.dispose();
 
-  // Create fresh models
+  // Create new models
   state.baselineModel = createBaselineModel();
   state.studentModel = createStudentModel(archType);
 
-  // Build models (force weight creation)
+  // Build models (forces weight creation)
   const dummy = tf.zeros([1, 16, 16, 1]);
   state.baselineModel.predict(dummy).dispose();
   state.studentModel.predict(dummy).dispose();
   dummy.dispose();
 
-  // Separate optimizers – brand new, no leftover state
+  // Fresh optimizers – no stale slots
   state.baselineOptimizer = tf.train.adam(CONFIG.learningRate);
   state.studentOptimizer = tf.train.adam(CONFIG.learningRate);
   state.step = 0;
@@ -268,7 +253,7 @@ async function init() {
   // Fixed noise input
   state.xInput = tf.randomUniform(CONFIG.inputShapeData);
 
-  // Render input canvas (AWAIT guarantees visibility)
+  // Render input canvas (AWAIT = guaranteed visible)
   await tf.browser.toPixels(
     state.xInput.squeeze(),
     document.getElementById("canvas-input")
@@ -291,7 +276,7 @@ async function init() {
 }
 
 // ==========================================
-// 8. Auto‑train Loop
+// 8. Auto‑train Loop (SIMPLE & ROBUST)
 // ==========================================
 
 function toggleAutoTrain() {
@@ -303,7 +288,8 @@ function toggleAutoTrain() {
     btn.innerText = "Auto Train (Stop)";
     btn.classList.add("btn-stop");
     btn.classList.remove("btn-auto");
-    loop();
+    // Start the loop (recursive async with await)
+    autoTrainLoop();
   }
 }
 
@@ -313,12 +299,14 @@ function stopAutoTrain() {
   btn.innerText = "Auto Train (Start)";
   btn.classList.add("btn-auto");
   btn.classList.remove("btn-stop");
+  // No need to cancel timer – loop will stop because isAutoTraining is false
 }
 
-function loop() {
-  if (state.isAutoTraining) {
-    trainStep().catch(console.error);
-    setTimeout(loop, CONFIG.autoTrainSpeed);
+async function autoTrainLoop() {
+  while (state.isAutoTraining) {
+    await trainStep();           // Wait for step to complete
+    await tf.nextFrame();        // Yield to browser (prevents blocking)
+    await new Promise(resolve => setTimeout(resolve, CONFIG.autoTrainDelay));
   }
 }
 
@@ -326,3 +314,4 @@ function loop() {
 // 9. Start
 // ==========================================
 init().catch(console.error);
+
