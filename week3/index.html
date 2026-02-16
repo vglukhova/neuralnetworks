@@ -131,9 +131,9 @@
                 <button id="reset">⟲ Reset Weights</button>
             </div>
             <div class="radio-group" id="archSelector">
-                <label><input type="radio" name="arch" value="compression" checked> Compression (implemented)</label>
-                <label><input type="radio" name="arch" value="transformation"> Transformation (TODO)</label>
-                <label><input type="radio" name="arch" value="expansion"> Expansion (TODO)</label>
+                <label><input type="radio" name="arch" value="compression" checked> Compression</label>
+                <label><input type="radio" name="arch" value="transformation"> Transformation</label>
+                <label><input type="radio" name="arch" value="expansion"> Expansion</label>
             </div>
         </div>
 
@@ -157,7 +157,7 @@
         </div>
     </div>
 
-    <footer>✨ Edit the TODO sections in app.js to change the student model's loss and architecture.</footer>
+    <footer>✨ The student model now uses a combined loss (MSE + smoothness + direction). Try different architectures!</footer>
 
     <!-- TensorFlow.js and main script -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
