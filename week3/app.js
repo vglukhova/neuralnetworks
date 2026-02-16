@@ -114,7 +114,7 @@ function createStudentModel(archType) {
     return model;
 }
 
-// --- Training step for both models using tf.variableGrads (safe and correct) ---
+// --- Training step for both models using tf.variableGrads (correct API) ---
 function trainStep() {
     // Use tf.tidy to clean up intermediate tensors
     tf.tidy(() => {
@@ -125,7 +125,13 @@ function trainStep() {
                 return baselineLoss(targetRamp, pred);
             };
             const { grads: baseGrads } = tf.variableGrads(baseLossFn, baselineModel.trainableVariables);
-            optimizer.applyGradients(Object.values(baseGrads).map(g => ({ value: g.originalVariable, grad: g })));
+            // Apply gradients: convert grads object to array of {value, grad}
+            const baseGradPairs = [];
+            for (const varName in baseGrads) {
+                const grad = baseGrads[varName];
+                baseGradPairs.push({ value: grad.originalVariable, grad: grad });
+            }
+            optimizer.applyGradients(baseGradPairs);
 
             // ---- Student gradients ----
             const studentLossFn = () => {
@@ -133,7 +139,12 @@ function trainStep() {
                 return studentLoss(targetRamp, pred);
             };
             const { grads: studentGrads } = tf.variableGrads(studentLossFn, studentModel.trainableVariables);
-            optimizer.applyGradients(Object.values(studentGrads).map(g => ({ value: g.originalVariable, grad: g })));
+            const studentGradPairs = [];
+            for (const varName in studentGrads) {
+                const grad = studentGrads[varName];
+                studentGradPairs.push({ value: grad.originalVariable, grad: grad });
+            }
+            optimizer.applyGradients(studentGradPairs);
 
             // ---- Update step count and log ----
             stepCount++;
