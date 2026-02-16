@@ -113,35 +113,51 @@ function createStudentModel(archType) {
     return model;
 }
 
-// --- Training step for both models ---
+// --- Training step for both models using GradientTape ---
 function trainStep() {
     tf.tidy(() => {
         try {
-            // ---- Baseline gradient ----
-            const baseGrads = tf.variableGrads(() => {
-                const pred = baselineModel.apply(xInput, { training: true });
-                return baselineLoss(targetRamp, pred);
-            }, baselineModel.trainableVariables);
-            optimizer.applyGradients(baseGrads.grads);
+            // ---- Baseline ----
+            const baseVars = baselineModel.trainableVariables;
+            const baseTape = tf.GradientTape();
+            baseTape.watch(baseVars);
+            const basePred = baselineModel.apply(xInput, { training: true });
+            const baseLoss = baselineLoss(targetRamp, basePred);
+            const baseGradsList = baseTape.gradient(baseLoss, baseVars);
+            baseTape.dispose();
 
-            // ---- Student gradient ----
-            const studentGrads = tf.variableGrads(() => {
-                const pred = studentModel.apply(xInput, { training: true });
-                return studentLoss(targetRamp, pred);
-            }, studentModel.trainableVariables);
-            optimizer.applyGradients(studentGrads.grads);
+            // Apply baseline gradients
+            if (baseGradsList) {
+                const baseGradPairs = baseVars.map((v, i) => ({ value: v, grad: baseGradsList[i] }));
+                optimizer.applyGradients(baseGradPairs);
+            }
+
+            // ---- Student ----
+            const studentVars = studentModel.trainableVariables;
+            const studentTape = tf.GradientTape();
+            studentTape.watch(studentVars);
+            const studentPred = studentModel.apply(xInput, { training: true });
+            const studentLossVal = studentLoss(targetRamp, studentPred);
+            const studentGradsList = studentTape.gradient(studentLossVal, studentVars);
+            studentTape.dispose();
+
+            // Apply student gradients
+            if (studentGradsList) {
+                const studentGradPairs = studentVars.map((v, i) => ({ value: v, grad: studentGradsList[i] }));
+                optimizer.applyGradients(studentGradPairs);
+            }
 
             // ---- Update step count and log ----
             stepCount++;
 
             // Get predictions after weight update for display
-            const predBaseline = baselineModel.predict(xInput);
-            const predStudent = studentModel.predict(xInput);
-            const lossBaseline = baselineLoss(targetRamp, predBaseline);
-            const lossStudent = studentLoss(targetRamp, predStudent);
+            const newBasePred = baselineModel.predict(xInput);
+            const newStudentPred = studentModel.predict(xInput);
+            const newBaseLoss = baselineLoss(targetRamp, newBasePred);
+            const newStudentLoss = studentLoss(targetRamp, newStudentPred);
 
-            log(`Step ${stepCount} | Baseline loss: ${lossBaseline.dataSync()[0].toFixed(4)} | Student loss: ${lossStudent.dataSync()[0].toFixed(4)}`);
-            updateCanvases(predBaseline, predStudent);
+            log(`Step ${stepCount} | Baseline loss: ${newBaseLoss.dataSync()[0].toFixed(4)} | Student loss: ${newStudentLoss.dataSync()[0].toFixed(4)}`);
+            updateCanvases(newBasePred, newStudentPred);
         } catch (e) {
             log(`Error in training step: ${e.message}`, true);
             stopAutoTrain();
