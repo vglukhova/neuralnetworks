@@ -1,5 +1,5 @@
 // app.js - The Gradient Puzzle
-// TensorFlow.js demo: baseline MSE vs student model with custom loss + architecture
+// Fixed: removed inner tf.tidy from loss components to preserve gradient graph
 
 // --- Global state ---
 let xInput;                 // fixed noise input [1,16,16,1]
@@ -29,11 +29,9 @@ function clearLog() {
 
 // Create target gradient: from 0 (left) to 1 (right)
 function createTargetRamp() {
-    return tf.tidy(() => {
-        const colVals = tf.linspace(0, 1, 16); // shape [16]
-        const rows = tf.ones([16, 1]).mul(colVals); // [16,16] each row identical
-        return rows.reshape([1, 16, 16, 1]);
-    });
+    const colVals = tf.linspace(0, 1, 16); // shape [16]
+    const rows = tf.ones([16, 1]).mul(colVals); // [16,16] each row identical
+    return rows.reshape([1, 16, 16, 1]);
 }
 
 // Fixed random input (keep same across resets)
@@ -41,29 +39,25 @@ function createFixedNoise() {
     return tf.randomUniform([1, 16, 16, 1], 0, 1);
 }
 
-// --- Loss components ---
+// --- Loss components (NO tf.tidy inside, to keep gradient graph) ---
 function mse(yTrue, yPred) {
     return tf.losses.meanSquaredError(yTrue, yPred).mean(); // scalar
 }
 
 // Smoothness: total variation (squared differences between adjacent pixels)
 function smoothness(yPred) {
-    return tf.tidy(() => {
-        // yPred shape [1,16,16,1]
-        const rightDiff = yPred.slice([0,0,0,0], [1,16,15,1]).sub(yPred.slice([0,0,1,0], [1,16,15,1]));
-        const downDiff = yPred.slice([0,0,0,0], [1,15,16,1]).sub(yPred.slice([0,1,0,0], [1,15,16,1]));
-        const tv = tf.square(rightDiff).sum().add(tf.square(downDiff).sum());
-        return tv;
-    });
+    // yPred shape [1,16,16,1]
+    const rightDiff = yPred.slice([0,0,0,0], [1,16,15,1]).sub(yPred.slice([0,0,1,0], [1,16,15,1]));
+    const downDiff = yPred.slice([0,0,0,0], [1,15,16,1]).sub(yPred.slice([0,1,0,0], [1,15,16,1]));
+    const tv = tf.square(rightDiff).sum().add(tf.square(downDiff).sum());
+    return tv; // scalar
 }
 
 // Direction: encourage correlation with target ramp (negative sign for minimization)
 function direction(yPred) {
-    return tf.tidy(() => {
-        // Ldir = -mean(yPred * targetRamp)
-        const prod = yPred.mul(targetRamp).mean().neg();
-        return prod;
-    });
+    // Ldir = -mean(yPred * targetRamp)
+    const prod = yPred.mul(targetRamp).mean().neg();
+    return prod; // scalar
 }
 
 // --- Baseline loss (fixed MSE) ---
@@ -114,9 +108,9 @@ function createStudentModel(archType) {
     return model;
 }
 
-// --- Training step for both models using tf.variableGrads (no GradientTape) ---
+// --- Training step for both models using tf.variableGrads ---
 function trainStep() {
-    // Use tf.tidy to clean up intermediate tensors
+    // Use tf.tidy to clean up intermediate tensors after gradients are applied
     tf.tidy(() => {
         try {
             // ---- Baseline gradients ----
@@ -206,6 +200,8 @@ function resetModels() {
         studentModel?.dispose();
         optimizer?.dispose();
 
+        // Recreate tensors? No, keep the same xInput and targetRamp from init.
+        // But we need to ensure they exist. If reset is called after init, they are fine.
         baselineModel = createBaselineModel();
         studentModel = createStudentModel(currentArch);
         optimizer = tf.train.adam(0.01);
