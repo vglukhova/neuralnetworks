@@ -11,7 +11,7 @@ let stepCount = 0;
 let autoTraining = false;
 let currentArch = 'compression'; // matches radio button
 
-// Hyperparameters for student loss (students will adjust these)
+// Hyperparameters for student loss (can be tuned)
 const LAMBDA_TV = 0.1;      // smoothness weight
 const LAMBDA_DIR = 0.01;    // direction weight
 
@@ -71,19 +71,13 @@ function baselineLoss(yTrue, yPred) {
     return mse(yTrue, yPred);
 }
 
-// --- Student loss (TO BE MODIFIED BY STUDENTS) ---
-// TODO-B: Implement custom loss by combining MSE, smoothness, and direction.
-// The current version is just MSE (identical to baseline). Uncomment and modify the lines below.
+// --- Student loss (custom: MSE + smoothness + direction) ---
 function studentLoss(yTrue, yPred) {
-    // ===== STUDENT TODO: Uncomment and adjust the combined loss =====
-    // const mseVal = mse(yTrue, yPred);
-    // const tvVal = smoothness(yPred);
-    // const dirVal = direction(yPred);
-    // return mseVal + LAMBDA_TV * tvVal + LAMBDA_DIR * dirVal;
-    // ===============================================================
-    
-    // Default: MSE only (to match baseline initially)
-    return mse(yTrue, yPred);
+    // Combined loss: encourage gradient structure
+    const mseVal = mse(yTrue, yPred);
+    const tvVal = smoothness(yPred);
+    const dirVal = direction(yPred);
+    return mseVal.add(LAMBDA_TV * tvVal).add(LAMBDA_DIR * dirVal);
 }
 
 // --- Model creators ---
@@ -97,24 +91,19 @@ function createBaselineModel() {
     return model;
 }
 
-// TODO-A: Implement different projection types for the student model.
+// Create student model with selectable architecture
 function createStudentModel(archType) {
-    // ===== STUDENT TODO: Implement 'transformation' and 'expansion' architectures =====
-    // Hint: use different hidden layer sizes.
-    // - compression: small hidden (e.g., 32 units)
-    // - transformation: same as input dimension (256 units) — already partially implemented
-    // - expansion: larger hidden (e.g., 512 units)
     const model = tf.sequential();
     model.add(tf.layers.flatten({ inputShape: [16, 16, 1] }));
 
     if (archType === 'compression') {
         model.add(tf.layers.dense({ units: 32, activation: 'relu' }));
     } else if (archType === 'transformation') {
-        // TODO: replace with correct implementation (e.g., units = 256)
-        throw new Error('Transformation architecture not implemented yet (TODO-A)');
+        // Hidden layer same size as flattened input (256)
+        model.add(tf.layers.dense({ units: 256, activation: 'relu' }));
     } else if (archType === 'expansion') {
-        // TODO: replace with correct implementation (e.g., units = 512)
-        throw new Error('Expansion architecture not implemented yet (TODO-A)');
+        // Larger hidden layer
+        model.add(tf.layers.dense({ units: 512, activation: 'relu' }));
     } else {
         throw new Error(`Unknown architecture: ${archType}`);
     }
@@ -197,13 +186,7 @@ function resetModels() {
         optimizer?.dispose();
 
         baselineModel = createBaselineModel();
-        try {
-            studentModel = createStudentModel(currentArch);
-        } catch (e) {
-            log(`Failed to create student model: ${e.message}`, true);
-            // Fallback to a dummy model to keep UI working
-            studentModel = createBaselineModel(); // temporary
-        }
+        studentModel = createStudentModel(currentArch);
         optimizer = tf.train.adam(0.01);
         stepCount = 0;
 
@@ -276,19 +259,15 @@ async function init() {
         radio.addEventListener('change', (e) => {
             stopAutoTrain();
             currentArch = e.target.value;
-            try {
-                // Recreate student model with new architecture
-                const newStudent = createStudentModel(currentArch);
-                studentModel.dispose();
-                studentModel = newStudent;
-                log(`Switched to ${currentArch} architecture.`);
-                // Re-render with new model's predictions
-                const predStudent = studentModel.predict(xInput);
-                const predBase = baselineModel.predict(xInput);
-                updateCanvases(predBase, predStudent);
-            } catch (err) {
-                log(`Error: ${err.message}`, true);
-            }
+            // Recreate student model with new architecture
+            const newStudent = createStudentModel(currentArch);
+            studentModel.dispose();
+            studentModel = newStudent;
+            log(`Switched to ${currentArch} architecture.`);
+            // Re-render with new model's predictions
+            const predStudent = studentModel.predict(xInput);
+            const predBase = baselineModel.predict(xInput);
+            updateCanvases(predBase, predStudent);
         });
     });
 }
