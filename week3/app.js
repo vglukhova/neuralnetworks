@@ -1,292 +1,199 @@
-// app.js - The Gradient Puzzle
-// TensorFlow.js demo: baseline MSE vs student model with custom loss + architecture
+// app.js - Neural Network Design: The Gradient Puzzle
+// Student task: Modify TODO blocks to create emergent gradient patterns!
 
-// --- Global state ---
-let xInput;                 // fixed noise input [1,16,16,1]
-let targetRamp;             // perfect gradient target [1,16,16,1]
-let baselineModel;
-let studentModel;
+let xInput, yTarget;
+let baselineModel, studentModel;
 let optimizer;
 let stepCount = 0;
-let autoTraining = false;
-let currentArch = 'compression'; // matches radio button
+let autoTrainInterval = null;
+let currentArch = 'compression';
 
-// Hyperparameters for student loss (can be tuned)
-const LAMBDA_TV = 0.1;      // smoothness weight
-const LAMBDA_DIR = 0.01;    // direction weight
+const canvases = {
+    input: document.getElementById('inputCanvas'),
+    baseline: document.getElementById('baselineCanvas'),
+    student: document.getElementById('studentCanvas')
+};
+const ctx = {
+    input: canvases.input.getContext('2d'),
+    baseline: canvases.baseline.getContext('2d'),
+    student: canvases.student.getContext('2d')
+};
 
-// --- Utility functions ---
-function log(message, isError = false) {
-    const logDiv = document.getElementById('logArea');
-    const className = isError ? 'error' : 'info';
-    logDiv.innerHTML += `<span class="${className}">> ${message}</span><br>`;
-    logDiv.scrollTop = logDiv.scrollHeight;
-}
+const statusEl = document.getElementById('status');
 
-function clearLog() {
-    document.getElementById('logArea').innerHTML = '';
-}
-
-// Create target gradient: from 0 (left) to 1 (right)
-function createTargetRamp() {
-    return tf.tidy(() => {
-        const colVals = tf.linspace(0, 1, 16); // shape [16]
-        const rows = tf.ones([16, 1]).mul(colVals); // [16,16] each row identical
-        return rows.reshape([1, 16, 16, 1]);
-    });
-}
-
-// Fixed random input (keep same across resets)
-function createFixedNoise() {
-    return tf.randomUniform([1, 16, 16, 1], 0, 1);
-}
-
-// --- Loss components ---
+// === HELPER FUNCTIONS (IMPLEMENTED - USE THESE!) ===
 function mse(yTrue, yPred) {
-    return tf.losses.meanSquaredError(yTrue, yPred).mean(); // scalar
+    return tf.mean(tf.square(tf.sub(yTrue, yPred)));
 }
 
-// Smoothness: total variation (squared differences between adjacent pixels)
 function smoothness(yPred) {
-    return tf.tidy(() => {
-        // yPred shape [1,16,16,1]
-        const rightDiff = yPred.slice([0,0,0,0], [1,16,15,1]).sub(yPred.slice([0,0,1,0], [1,16,15,1]));
-        const downDiff = yPred.slice([0,0,0,0], [1,15,16,1]).sub(yPred.slice([0,1,0,0], [1,15,16,1]));
-        const tv = tf.square(rightDiff).sum().add(tf.square(downDiff).sum());
-        return tv;
-    });
+    // Ltv = SUM(Pi - Pi+1)^2 (total variation loss)
+    const [batch, h, w, c] = yPred.shape;
+    const pixels = yPred.reshape([h * w]);
+    const diffs = tf.sub(pixels.slice([0]), pixels.slice([1]));
+    return tf.mean(tf.square(diffs));
 }
 
-// Direction: encourage correlation with target ramp (negative sign for minimization)
-function direction(yPred) {
-    return tf.tidy(() => {
-        // Ldir = -mean(yPred * targetRamp)
-        const prod = yPred.mul(targetRamp).mean().neg();
-        return prod;
-    });
+function directionX(yPred) {
+    // Ldir = -Mean(Output * Task) where Task encourages left-dark/right-bright
+    const [batch, h, w, c] = yPred.shape;
+    const xCoord = tf.linspace(0, 1, w).expandDims(0).expandDims(0).expandDims(-1);
+    const task = tf.sub(tf.onesLike(xCoord), xCoord); // 1-left, 0-right
+    const weighted = tf.mul(yPred, task);
+    return tf.neg(tf.mean(weighted));
 }
 
-// --- Baseline loss (fixed MSE) ---
-function baselineLoss(yTrue, yPred) {
-    return mse(yTrue, yPred);
-}
-
-// --- Student loss (custom: MSE + smoothness + direction) ---
-function studentLoss(yTrue, yPred) {
-    // Combined loss: encourage gradient structure
-    const mseVal = mse(yTrue, yPred);
-    const tvVal = smoothness(yPred);
-    const dirVal = direction(yPred);
-    return mseVal.add(LAMBDA_TV * tvVal).add(LAMBDA_DIR * dirVal);
-}
-
-// --- Model creators ---
-function createBaselineModel() {
-    const model = tf.sequential();
-    model.add(tf.layers.flatten({ inputShape: [16, 16, 1] }));
-    // Baseline uses a simple compression architecture (fixed)
-    model.add(tf.layers.dense({ units: 32, activation: 'relu' }));
-    model.add(tf.layers.dense({ units: 256, activation: 'sigmoid' }));
-    model.add(tf.layers.reshape({ targetShape: [16, 16, 1] }));
-    return model;
-}
-
-// Create student model with selectable architecture
-function createStudentModel(archType) {
-    const model = tf.sequential();
-    model.add(tf.layers.flatten({ inputShape: [16, 16, 1] }));
-
-    if (archType === 'compression') {
-        model.add(tf.layers.dense({ units: 32, activation: 'relu' }));
-    } else if (archType === 'transformation') {
-        // Hidden layer same size as flattened input (256)
-        model.add(tf.layers.dense({ units: 256, activation: 'relu' }));
-    } else if (archType === 'expansion') {
-        // Larger hidden layer
-        model.add(tf.layers.dense({ units: 512, activation: 'relu' }));
-    } else {
-        throw new Error(`Unknown architecture: ${archType}`);
+// === CANVAS RENDERING ===
+function renderTensor(canvasCtx, tensor, scale = 10) {
+    const data = tensor.dataSync();
+    const imgData = ctx.input.createImageData(canvasCtx.canvas.width, canvasCtx.canvas.height);
+    
+    for (let i = 0; i < data.length; i++) {
+        const val = Math.max(0, Math.min(1, data[i])) * 255;
+        const idx = i * 4;
+        imgData.data[idx] = val;
+        imgData.data[idx + 1] = val;
+        imgData.data[idx + 2] = val;
+        imgData.data[idx + 3] = 255;
     }
+    
+    canvasCtx.putImageData(imgData, 0, 0);
+}
 
-    model.add(tf.layers.dense({ units: 256, activation: 'sigmoid' }));
-    model.add(tf.layers.reshape({ targetShape: [16, 16, 1] }));
+function logStatus(message) {
+    stepCount++;
+    statusEl.innerHTML += `[Step ${stepCount}] ${message}\n`;
+    statusEl.scrollTop = statusEl.scrollHeight;
+}
+
+// === BASELINE MODEL (MSE ONLY - FIXED) ===
+function createBaselineModel() {
+    const model = tf.sequential({
+        layers: [
+            tf.layers.conv2d({inputShape: [16, 16, 1], filters: 32, kernelSize: 3, padding: 'same', activation: 'relu'}),
+            tf.layers.conv2d({filters: 16, kernelSize: 3, padding: 'same', activation: 'relu'}),
+            tf.layers.conv2d({filters: 1, kernelSize: 3, padding: 'same', activation: 'sigmoid'})
+        ]
+    });
+    model.compile({optimizer: 'adam', loss: 'meanSquaredError'});
     return model;
 }
 
-// --- Training step for both models using GradientTape ---
-function trainStep() {
-    tf.tidy(() => {
-        try {
-            // ---- Baseline ----
-            const baseVars = baselineModel.trainableVariables;
-            const baseTape = tf.GradientTape();
-            baseTape.watch(baseVars);
-            const basePred = baselineModel.apply(xInput, { training: true });
-            const baseLoss = baselineLoss(targetRamp, basePred);
-            const baseGradsList = baseTape.gradient(baseLoss, baseVars);
-            baseTape.dispose();
+// === STUDENT MODEL TODO-A: ARCHITECTURE ===
+function createStudentModel(archType) {
+    // TODO-A: Implement three projection types for student model
+    // Baseline is COMPRESSION (16x16 -> 16x16 with bottleneck)
+    // TRANSFORMATION: rotate/flip the input pattern
+    // EXPANSION: 16x16 -> 32x32 upsampling then back to 16x16
+    
+    if (archType === 'compression') {
+        // Implemented baseline compression (same size with bottleneck)
+        return tf.sequential({
+            layers: [
+                tf.layers.conv2d({inputShape: [16, 16, 1], filters: 32, kernelSize: 3, padding: 'same', activation: 'relu'}),
+                tf.layers.conv2d({filters: 8, kernelSize: 3, padding: 'same', activation: 'relu'}),
+                tf.layers.conv2d({filters: 1, kernelSize: 3, padding: 'same', activation: 'sigmoid'})
+            ]
+        });
+    } else if (archType === 'transformation') {
+        throw new Error('TODO-A: Implement transformation architecture (rotate/flip patterns)');
+    } else if (archType === 'expansion') {
+        throw new Error('TODO-A: Implement expansion architecture (upsample 16x16 -> 32x32 -> 16x16)');
+    }
+    throw new Error(`Unknown architecture: ${archType}`);
+}
 
-            // Apply baseline gradients
-            if (baseGradsList) {
-                const baseGradPairs = baseVars.map((v, i) => ({ value: v, grad: baseGradsList[i] }));
-                optimizer.applyGradients(baseGradPairs);
-            }
-
-            // ---- Student ----
-            const studentVars = studentModel.trainableVariables;
-            const studentTape = tf.GradientTape();
-            studentTape.watch(studentVars);
-            const studentPred = studentModel.apply(xInput, { training: true });
-            const studentLossVal = studentLoss(targetRamp, studentPred);
-            const studentGradsList = studentTape.gradient(studentLossVal, studentVars);
-            studentTape.dispose();
-
-            // Apply student gradients
-            if (studentGradsList) {
-                const studentGradPairs = studentVars.map((v, i) => ({ value: v, grad: studentGradsList[i] }));
-                optimizer.applyGradients(studentGradPairs);
-            }
-
-            // ---- Update step count and log ----
-            stepCount++;
-
-            // Get predictions after weight update for display
-            const newBasePred = baselineModel.predict(xInput);
-            const newStudentPred = studentModel.predict(xInput);
-            const newBaseLoss = baselineLoss(targetRamp, newBasePred);
-            const newStudentLoss = studentLoss(targetRamp, newStudentPred);
-
-            log(`Step ${stepCount} | Baseline loss: ${newBaseLoss.dataSync()[0].toFixed(4)} | Student loss: ${newStudentLoss.dataSync()[0].toFixed(4)}`);
-            updateCanvases(newBasePred, newStudentPred);
-        } catch (e) {
-            log(`Error in training step: ${e.message}`, true);
-            stopAutoTrain();
+// === TRAINING STEP ===
+async function trainStep() {
+    const baselinePred = baselineModel.predict(xInput);
+    const studentPred = studentModel.predict(xInput);
+    
+    // Baseline loss (MSE only)
+    const baselineLoss = await mse(yTarget, baselinePred).dataSync()[0];
+    
+    // TODO-B: Student custom loss
+    // Start with: return mse(yTarget, yPred)
+    // Add: + lambda1 * smoothness(yPred) + lambda2 * directionX(yPred)
+    // Try lambda1=0.1, lambda2=0.5 initially
+    const studentLossFn = (yTrue, yPred) => {
+        // TODO-B: Replace this MSE with Ltotal = Lsortedmse + lambda1*Ltv + lambda2*Ldir
+        return mse(yTrue, yPred);
+    };
+    const studentLoss = await studentLossFn(yTarget, studentPred).dataSync()[0];
+    
+    // Backprop for baseline
+    await baselineModel.fit(xInput, yTarget, {
+        epochs: 1,
+        verbose: 0,
+        callbacks: {
+            onBatchEnd: () => baselinePred.dispose()
         }
     });
+    
+    // Backprop for student (manual loss)
+    const grads = tf.variableGrads(studentLossFn(yTarget, studentPred));
+    optimizer.applyGradients(grads.grads);
+    tf.dispose(grads);
+    
+    // Render
+    renderTensor(ctx.baseline, baselinePred);
+    renderTensor(ctx.student, studentPred);
+    
+    baselinePred.dispose();
+    studentPred.dispose();
+    
+    logStatus(`Baseline: ${baselineLoss.toFixed(4)}, Student: ${studentLoss.toFixed(4)}`);
 }
 
-// --- Canvas rendering ---
-function updateCanvases(predBaseline, predStudent) {
-    // Input canvas
-    const inputData = xInput.dataSync();
-    drawCanvas('canvasInput', inputData);
-
-    // Baseline output
-    const baseData = predBaseline.dataSync();
-    drawCanvas('canvasBaseline', baseData);
-
-    // Student output
-    const studentData = predStudent.dataSync();
-    drawCanvas('canvasStudent', studentData);
-}
-
-function drawCanvas(canvasId, data) {
-    const canvas = document.getElementById(canvasId);
-    const ctx = canvas.getContext('2d');
-    const imageData = ctx.createImageData(16, 16);
-    for (let i = 0; i < 256; i++) {
-        const val = Math.floor(data[i] * 255);
-        imageData.data[i*4] = val;
-        imageData.data[i*4+1] = val;
-        imageData.data[i*4+2] = val;
-        imageData.data[i*4+3] = 255;
-    }
-    ctx.putImageData(imageData, 0, 0);
-}
-
-// --- Reset everything ---
-function resetModels() {
-    tf.tidy(() => {
-        baselineModel?.dispose();
-        studentModel?.dispose();
-        optimizer?.dispose();
-
-        baselineModel = createBaselineModel();
-        studentModel = createStudentModel(currentArch);
-        optimizer = tf.train.adam(0.01);
-        stepCount = 0;
-
-        // Initial prediction for display
-        const predBase = baselineModel.predict(xInput);
-        const predStudent = studentModel.predict(xInput);
-        updateCanvases(predBase, predStudent);
-
-        clearLog();
-        log('Weights reset. Ready.');
-    });
-}
-
-// --- Auto training ---
-function stepAutoTrain() {
-    if (!autoTraining) return;
-    for (let i = 0; i < 5; i++) { // multiple steps per frame for speed
-        trainStep();
-    }
-    requestAnimationFrame(stepAutoTrain);
-}
-
-function startAutoTrain() {
-    autoTraining = true;
-    document.getElementById('autoTrain').textContent = '⏸ Stop';
-    stepAutoTrain();
-}
-
-function stopAutoTrain() {
-    autoTraining = false;
-    document.getElementById('autoTrain').textContent = '▶ Auto Train';
-}
-
-// --- Initialization ---
+// === INIT ===
 async function init() {
-    xInput = createFixedNoise();
-    targetRamp = createTargetRamp();
-
+    // Fixed random noise input/target
+    xInput = tf.tidy(() => tf.randomUniform([1, 16, 16, 1], 0, 1));
+    yTarget = tf.tidy(() => tf.randomUniform([1, 16, 16, 1], 0, 1));
+    
+    optimizer = tf.train.adam(0.01);
+    
     baselineModel = createBaselineModel();
     studentModel = createStudentModel(currentArch);
-    optimizer = tf.train.adam(0.01);
-
+    
     // Initial render
-    const predBase = baselineModel.predict(xInput);
-    const predStudent = studentModel.predict(xInput);
-    updateCanvases(predBase, predStudent);
-
-    log('Models ready. Step 0 | Baseline loss: — | Student loss: —');
-
-    // --- Event listeners ---
-    document.getElementById('trainStep').addEventListener('click', () => {
-        if (autoTraining) stopAutoTrain();
-        trainStep();
-    });
-
-    document.getElementById('autoTrain').addEventListener('click', () => {
-        if (autoTraining) {
-            stopAutoTrain();
-        } else {
-            startAutoTrain();
-        }
-    });
-
-    document.getElementById('reset').addEventListener('click', () => {
-        stopAutoTrain();
-        resetModels();
-    });
-
-    document.querySelectorAll('input[name="arch"]').forEach(radio => {
-        radio.addEventListener('change', (e) => {
-            stopAutoTrain();
-            currentArch = e.target.value;
-            // Recreate student model with new architecture
-            const newStudent = createStudentModel(currentArch);
-            studentModel.dispose();
-            studentModel = newStudent;
-            log(`Switched to ${currentArch} architecture.`);
-            // Re-render with new model's predictions
-            const predStudent = studentModel.predict(xInput);
-            const predBase = baselineModel.predict(xInput);
-            updateCanvases(predBase, predStudent);
-        });
-    });
+    renderTensor(ctx.input, xInput.squeeze());
+    await trainStep();
+    
+    logStatus('Initialized! Modify TODO-A/B in app.js to solve the gradient puzzle.');
 }
 
-// Start everything when the page loads
-window.addEventListener('load', init);
+// === UI EVENT HANDLERS ===
+document.getElementById('trainStep').addEventListener('click', trainStep);
+document.getElementById('resetWeights').addEventListener('click', async () => {
+    baselineModel.dispose();
+    studentModel.dispose();
+    await init();
+    stepCount = 0;
+    statusEl.innerHTML = 'Reset!';
+});
+
+document.getElementById('autoTrain').addEventListener('click', () => {
+    const btn = document.getElementById('autoTrain');
+    if (autoTrainInterval) {
+        clearInterval(autoTrainInterval);
+        autoTrainInterval = null;
+        btn.textContent = 'Auto Train (Start)';
+    } else {
+        autoTrainInterval = setInterval(trainStep, 100);
+        btn.textContent = 'Auto Train (Stop)';
+    }
+});
+
+// Architecture selector (student model only)
+document.querySelectorAll('input[name="arch"]').forEach(radio => {
+    radio.addEventListener('change', async (e) => {
+        currentArch = e.target.value;
+        studentModel.dispose();
+        studentModel = createStudentModel(currentArch);
+        logStatus(`Switched to ${currentArch} architecture`);
+    });
+});
+
+init();
+
