@@ -295,6 +295,3 @@ async function init() {
 
 // Start everything when the page loads
 window.addEventListener('load', init);
-}
-
-window.addEventListener('load', init);
