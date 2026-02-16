@@ -128,33 +128,30 @@ function createStudentModel(archType) {
 function trainStep() {
     tf.tidy(() => {
         try {
-            // Ensure models exist
-            if (!baselineModel || !studentModel) return;
+            // ---- Baseline gradient ----
+            const baseGrads = tf.variableGrads(() => {
+                const pred = baselineModel.apply(xInput, { training: true });
+                return baselineLoss(targetRamp, pred);
+            }, baselineModel.trainableVariables);
+            optimizer.applyGradients(baseGrads.grads);
 
-            // Get predictions
-            const predBaseline = baselineModel.apply(xInput, { training: true });
-            const predStudent = studentModel.apply(xInput, { training: true });
+            // ---- Student gradient ----
+            const studentGrads = tf.variableGrads(() => {
+                const pred = studentModel.apply(xInput, { training: true });
+                return studentLoss(targetRamp, pred);
+            }, studentModel.trainableVariables);
+            optimizer.applyGradients(studentGrads.grads);
 
-            // Compute losses
-            const lossBaseline = baselineLoss(targetRamp, predBaseline);
-            const lossStudent = studentLoss(targetRamp, predStudent); // student may throw
-
-            // Compute gradients for baseline
-            const gradsBaseline = tf.grads(() => lossBaseline);
-            const [gradsB] = gradsBaseline([predBaseline], 0); // 0 = yPred? Actually we need vars
-            // Better: use tf.variableGrads
-            const { value, grads } = tf.variableGrads(() => lossBaseline, baselineModel.trainableVariables);
-            optimizer.applyGradients(grads);
-
-            // Compute gradients for student
-            const { value: sVal, grads: sGrads } = tf.variableGrads(() => lossStudent, studentModel.trainableVariables);
-            optimizer.applyGradients(sGrads);
-
-            // Update log and step count
+            // ---- Update step count and log ----
             stepCount++;
-            log(`Step ${stepCount} | Baseline loss: ${lossBaseline.dataSync()[0].toFixed(4)} | Student loss: ${lossStudent.dataSync()[0].toFixed(4)}`);
 
-            // Render
+            // Get predictions after weight update for display
+            const predBaseline = baselineModel.predict(xInput);
+            const predStudent = studentModel.predict(xInput);
+            const lossBaseline = baselineLoss(targetRamp, predBaseline);
+            const lossStudent = studentLoss(targetRamp, predStudent);
+
+            log(`Step ${stepCount} | Baseline loss: ${lossBaseline.dataSync()[0].toFixed(4)} | Student loss: ${lossStudent.dataSync()[0].toFixed(4)}`);
             updateCanvases(predBaseline, predStudent);
         } catch (e) {
             log(`Error in training step: ${e.message}`, true);
@@ -214,8 +211,6 @@ function resetModels() {
         const predBase = baselineModel.predict(xInput);
         const predStudent = studentModel.predict(xInput);
         updateCanvases(predBase, predStudent);
-        predBase.dispose();
-        predStudent.dispose();
 
         clearLog();
         log('Weights reset. Ready.');
@@ -255,8 +250,6 @@ async function init() {
     const predBase = baselineModel.predict(xInput);
     const predStudent = studentModel.predict(xInput);
     updateCanvases(predBase, predStudent);
-    predBase.dispose();
-    predStudent.dispose();
 
     log('Models ready. Step 0 | Baseline loss: — | Student loss: —');
 
@@ -293,8 +286,6 @@ async function init() {
                 const predStudent = studentModel.predict(xInput);
                 const predBase = baselineModel.predict(xInput);
                 updateCanvases(predBase, predStudent);
-                predBase.dispose();
-                predStudent.dispose();
             } catch (err) {
                 log(`Error: ${err.message}`, true);
             }
