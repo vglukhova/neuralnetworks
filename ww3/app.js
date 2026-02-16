@@ -1,5 +1,5 @@
 // app.js - The Gradient Puzzle
-// Fixed: removed inner tf.tidy from loss components to preserve gradient graph
+// TensorFlow.js demo: baseline MSE vs student model with custom loss + architecture
 
 // --- Global state ---
 let xInput;                 // fixed noise input [1,16,16,1]
@@ -29,9 +29,11 @@ function clearLog() {
 
 // Create target gradient: from 0 (left) to 1 (right)
 function createTargetRamp() {
-    const colVals = tf.linspace(0, 1, 16); // shape [16]
-    const rows = tf.ones([16, 1]).mul(colVals); // [16,16] each row identical
-    return rows.reshape([1, 16, 16, 1]);
+    return tf.tidy(() => {
+        const colVals = tf.linspace(0, 1, 16); // shape [16]
+        const rows = tf.ones([16, 1]).mul(colVals); // [16,16] each row identical
+        return rows.reshape([1, 16, 16, 1]);
+    });
 }
 
 // Fixed random input (keep same across resets)
@@ -39,25 +41,29 @@ function createFixedNoise() {
     return tf.randomUniform([1, 16, 16, 1], 0, 1);
 }
 
-// --- Loss components (NO tf.tidy inside, to keep gradient graph) ---
+// --- Loss components ---
 function mse(yTrue, yPred) {
-    return tf.losses.meanSquaredError(yTrue, yPred).mean(); // scalar
+    return tf.losses.meanSquaredError(yTrue, yPred); // scalar
 }
 
 // Smoothness: total variation (squared differences between adjacent pixels)
 function smoothness(yPred) {
-    // yPred shape [1,16,16,1]
-    const rightDiff = yPred.slice([0,0,0,0], [1,16,15,1]).sub(yPred.slice([0,0,1,0], [1,16,15,1]));
-    const downDiff = yPred.slice([0,0,0,0], [1,15,16,1]).sub(yPred.slice([0,1,0,0], [1,15,16,1]));
-    const tv = tf.square(rightDiff).sum().add(tf.square(downDiff).sum());
-    return tv; // scalar
+    return tf.tidy(() => {
+        // yPred shape [1,16,16,1]
+        const rightDiff = yPred.slice([0,0,0,0], [1,16,15,1]).sub(yPred.slice([0,0,1,0], [1,16,15,1]));
+        const downDiff = yPred.slice([0,0,0,0], [1,15,16,1]).sub(yPred.slice([0,1,0,0], [1,15,16,1]));
+        const tv = tf.square(rightDiff).sum().add(tf.square(downDiff).sum());
+        return tv;
+    });
 }
 
 // Direction: encourage correlation with target ramp (negative sign for minimization)
 function direction(yPred) {
-    // Ldir = -mean(yPred * targetRamp)
-    const prod = yPred.mul(targetRamp).mean().neg();
-    return prod; // scalar
+    return tf.tidy(() => {
+        // Ldir = -mean(yPred * targetRamp)
+        const prod = yPred.mul(targetRamp).mean().neg();
+        return prod;
+    });
 }
 
 // --- Baseline loss (fixed MSE) ---
@@ -72,7 +78,7 @@ function studentLoss(yTrue, yPred) {
     const tvVal = smoothness(yPred);
     const dirVal = direction(yPred);
     // Return scalar (adding scalars yields scalar)
-    return mseVal.add(LAMBDA_TV * tvVal).add(LAMBDA_DIR * dirVal);
+    return mseVal.add(tvVal.mul(LAMBDA_TV)).add(dirVal.mul(LAMBDA_DIR));
 }
 
 // --- Model creators ---
@@ -108,39 +114,30 @@ function createStudentModel(archType) {
     return model;
 }
 
-// --- Training step for both models using tf.variableGrads ---
+// --- Training step for both models ---
 function trainStep() {
-    // Use tf.tidy to clean up intermediate tensors after gradients are applied
+    // Use tf.tidy to clean up intermediate tensors
     tf.tidy(() => {
         try {
             // ---- Baseline gradients ----
-            const baseLossFn = () => {
+            // Compute gradients for baseline model
+            const baseGrads = tf.variableGrads(() => {
                 const pred = baselineModel.apply(xInput, { training: true });
                 return baselineLoss(targetRamp, pred);
-            };
-            const { grads: baseGrads } = tf.variableGrads(baseLossFn, baselineModel.trainableVariables);
+            }, baselineModel.trainableVariables);
             
-            // Prepare gradient pairs for optimizer
-            const baseGradPairs = [];
-            for (const varName in baseGrads) {
-                const grad = baseGrads[varName];
-                baseGradPairs.push({ value: grad.originalVariable, grad: grad });
-            }
-            optimizer.applyGradients(baseGradPairs);
+            // Apply gradients to baseline model
+            optimizer.applyGradients(baseGrads.grads);
 
             // ---- Student gradients ----
-            const studentLossFn = () => {
+            // Compute gradients for student model
+            const studentGrads = tf.variableGrads(() => {
                 const pred = studentModel.apply(xInput, { training: true });
                 return studentLoss(targetRamp, pred);
-            };
-            const { grads: studentGrads } = tf.variableGrads(studentLossFn, studentModel.trainableVariables);
+            }, studentModel.trainableVariables);
             
-            const studentGradPairs = [];
-            for (const varName in studentGrads) {
-                const grad = studentGrads[varName];
-                studentGradPairs.push({ value: grad.originalVariable, grad: grad });
-            }
-            optimizer.applyGradients(studentGradPairs);
+            // Apply gradients to student model
+            optimizer.applyGradients(studentGrads.grads);
 
             // ---- Update step count and log ----
             stepCount++;
@@ -148,13 +145,25 @@ function trainStep() {
             // Get predictions after weight update for display
             const predBaseline = baselineModel.predict(xInput);
             const predStudent = studentModel.predict(xInput);
+            
+            // Compute loss values for logging
             const lossBaseline = baselineLoss(targetRamp, predBaseline);
             const lossStudent = studentLoss(targetRamp, predStudent);
+            
+            // Get numeric values for logging
+            const baselineLossVal = lossBaseline.arraySync();
+            const studentLossVal = lossStudent.arraySync();
 
-            log(`Step ${stepCount} | Baseline loss: ${lossBaseline.dataSync()[0].toFixed(4)} | Student loss: ${lossStudent.dataSync()[0].toFixed(4)}`);
+            log(`Step ${stepCount} | Baseline loss: ${baselineLossVal.toFixed(4)} | Student loss: ${studentLossVal.toFixed(4)}`);
             updateCanvases(predBaseline, predStudent);
+            
+            // Clean up loss tensors
+            lossBaseline.dispose();
+            lossStudent.dispose();
+            
         } catch (e) {
             log(`Error in training step: ${e.message}`, true);
+            console.error(e);
             stopAutoTrain();
         }
     });
@@ -200,8 +209,6 @@ function resetModels() {
         studentModel?.dispose();
         optimizer?.dispose();
 
-        // Recreate tensors? No, keep the same xInput and targetRamp from init.
-        // But we need to ensure they exist. If reset is called after init, they are fine.
         baselineModel = createBaselineModel();
         studentModel = createStudentModel(currentArch);
         optimizer = tf.train.adam(0.01);
