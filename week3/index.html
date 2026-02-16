@@ -121,7 +121,7 @@
 </head>
 <body>
     <h1>🧩 Neural Network Design: The Gradient Puzzle</h1>
-    <div class="sub">Loss function = rule of the game — modify the student model to transform noise into a smooth gradient</div>
+    <div class="sub">Loss function = rule of the game — the student model transforms noise into a smooth gradient</div>
 
     <div class="container">
         <div class="panel">
@@ -147,7 +147,7 @@
                 <canvas id="canvasBaseline" width="16" height="16"></canvas>
             </div>
             <div class="canvas-item">
-                <div>🧪 Student (customizable)</div>
+                <div>🧪 Student (custom loss + architecture)</div>
                 <canvas id="canvasStudent" width="16" height="16"></canvas>
             </div>
         </div>
@@ -157,7 +157,7 @@
         </div>
     </div>
 
-    <footer>✨ The student model now uses a combined loss (MSE + smoothness + direction). Try different architectures!</footer>
+    <footer>✨ The student model uses MSE + smoothness + direction. Try different architectures!</footer>
 
     <!-- TensorFlow.js and main script -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
