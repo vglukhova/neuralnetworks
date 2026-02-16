@@ -116,40 +116,20 @@ function createStudentModel(archType) {
 
 // --- Training step for both models using tf.variableGrads (correct API) ---
 function trainStep() {
-    // Use tf.tidy to clean up intermediate tensors
     tf.tidy(() => {
         try {
             // ---- Baseline gradients ----
-            const baseLossFn = () => {
-                const pred = baselineModel.apply(xInput, { training: true });
-                return baselineLoss(targetRamp, pred);
-            };
-            const { grads: baseGrads } = tf.variableGrads(baseLossFn, baselineModel.trainableVariables);
-            // Apply gradients: convert grads object to array of {value, grad}
-            const baseGradPairs = [];
-            for (const varName in baseGrads) {
-                const grad = baseGrads[varName];
-                baseGradPairs.push({ value: grad.originalVariable, grad: grad });
-            }
-            optimizer.applyGradients(baseGradPairs);
+            const baseLossFn = () => baselineLoss(targetRamp, baselineModel.apply(xInput, { training: true }));
+            const { grads: baseGrads } = tf.variableGrads(baseLossFn);
+            optimizer.applyGradients(baseGrads);  // Direct use of {value, grads} object
 
             // ---- Student gradients ----
-            const studentLossFn = () => {
-                const pred = studentModel.apply(xInput, { training: true });
-                return studentLoss(targetRamp, pred);
-            };
-            const { grads: studentGrads } = tf.variableGrads(studentLossFn, studentModel.trainableVariables);
-            const studentGradPairs = [];
-            for (const varName in studentGrads) {
-                const grad = studentGrads[varName];
-                studentGradPairs.push({ value: grad.originalVariable, grad: grad });
-            }
-            optimizer.applyGradients(studentGradPairs);
+            const studentLossFn = () => studentLoss(targetRamp, studentModel.apply(xInput, { training: true }));
+            const { grads: studentGrads } = tf.variableGrads(studentLossFn);
+            optimizer.applyGradients(studentGrads);  // Direct use
 
-            // ---- Update step count and log ----
+            // Update step count and log
             stepCount++;
-
-            // Get predictions after weight update for display
             const predBaseline = baselineModel.predict(xInput);
             const predStudent = studentModel.predict(xInput);
             const lossBaseline = baselineLoss(targetRamp, predBaseline);
