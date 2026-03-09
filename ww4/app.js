@@ -396,7 +396,11 @@ class DenoiserApp {
     }
 
     // ─────────────────────────────────────────────────────────
-    //  Render denoising result cards for 5 images
+    //  Render denoising results — slide layout:
+    //  Row 1: Noisy (5 images)
+    //  Row 2: Max Pooling denoised
+    //  Label: "Compare Max Pooling vs Average Pooling"
+    //  Row 3: Average Pooling denoised
     // ─────────────────────────────────────────────────────────
     renderPreview(cleanArr, noisyArr, maxArr, avgArr) {
         const container = document.getElementById('previewContainer');
@@ -404,82 +408,64 @@ class DenoiserApp {
 
         let totalPsnrNoisy = 0, totalPsnrMax = 0, totalPsnrAvg = 0;
 
-        for (let i = 0; i < 5; i++) {
-            // ── Compute PSNR for this image ──────────────────
-            const psnrNoisy = this.computePSNR(cleanArr[i], noisyArr[i]);
-            const psnrMax   = maxArr ? this.computePSNR(cleanArr[i], maxArr[i]) : null;
-            const psnrAvg   = avgArr ? this.computePSNR(cleanArr[i], avgArr[i]) : null;
+        const makeCell = (imageData) => {
+            const cell = document.createElement('div');
+            cell.className = 'img-cell';
+            const canvas = document.createElement('canvas');
+            const flat = imageData.flat(3);
+            const tensor = tf.tensor(flat, [28, 28, 1]);
+            this.dataLoader.draw28x28ToCanvas(tensor, canvas, 2);
+            tensor.dispose();
+            cell.appendChild(canvas);
+            return cell;
+        };
 
-            totalPsnrNoisy += psnrNoisy;
-            if (psnrMax !== null) totalPsnrMax += psnrMax;
-            if (psnrAvg !== null) totalPsnrAvg += psnrAvg;
-
-            // ── Card container ───────────────────────────────
-            const item = document.createElement('div');
-            item.className = 'preview-item';
-
-            const title = document.createElement('div');
-            title.className = 'item-title';
-            title.textContent = `Sample ${i + 1}`;
-            item.appendChild(title);
-
-            // ── Image strip: Original | Noisy | Max | Avg ────
+        const makeRow = (label, imageArrays, psnrValues = null) => {
+            const row = document.createElement('div');
+            row.className = 'preview-row-slide';
+            const header = document.createElement('div');
+            header.className = 'row-label';
+            header.textContent = label;
+            if (psnrValues) {
+                const avg = psnrValues.reduce((a, b) => a + b, 0) / psnrValues.length;
+                header.textContent += ` — PSNR: ${avg.toFixed(1)} dB`;
+            }
+            row.appendChild(header);
             const strip = document.createElement('div');
             strip.className = 'img-strip';
+            imageArrays.forEach(arr => strip.appendChild(makeCell(arr)));
+            row.appendChild(strip);
+            return row;
+        };
 
-            const makeCell = (imageData, label) => {
-                const cell = document.createElement('div');
-                cell.className = 'img-cell';
+        // Compute PSNR for each image
+        const psnrNoisy = [], psnrMax = [], psnrAvg = [];
+        for (let i = 0; i < 5; i++) {
+            psnrNoisy.push(this.computePSNR(cleanArr[i], noisyArr[i]));
+            if (maxArr) psnrMax.push(this.computePSNR(cleanArr[i], maxArr[i]));
+            if (avgArr) psnrAvg.push(this.computePSNR(cleanArr[i], avgArr[i]));
+            totalPsnrNoisy += psnrNoisy[i];
+            if (maxArr) totalPsnrMax += psnrMax[i];
+            if (avgArr) totalPsnrAvg += psnrAvg[i];
+        }
 
-                const canvas = document.createElement('canvas');
-                // imageData is [28, 28, 1] — flatten and use explicit shape for reliable rendering
-                const flat = imageData.flat(3);
-                const tensor = tf.tensor(flat, [28, 28, 1]);
-                this.dataLoader.draw28x28ToCanvas(tensor, canvas, 2);
-                tensor.dispose();
+        // Row 1: Noisy (slide top row)
+        container.appendChild(makeRow('Noisy', noisyArr, psnrNoisy));
 
-                const lbl = document.createElement('span');
-                lbl.textContent = label;
+        // Row 2: Max Pooling denoised
+        if (maxArr) {
+            container.appendChild(makeRow('Max Pooling', maxArr, psnrMax));
+        }
 
-                cell.appendChild(canvas);
-                cell.appendChild(lbl);
-                return cell;
-            };
+        // Label: Compare Max Pooling vs Average Pooling
+        const compareLabel = document.createElement('div');
+        compareLabel.className = 'compare-label';
+        compareLabel.textContent = 'Compare Max Pooling vs Average Pooling';
+        container.appendChild(compareLabel);
 
-            strip.appendChild(makeCell(cleanArr[i],  'Original'));
-            strip.appendChild(makeCell(noisyArr[i],  '+Noise'));
-            if (maxArr) strip.appendChild(makeCell(maxArr[i], 'Max'));
-            if (avgArr) strip.appendChild(makeCell(avgArr[i], 'Avg'));
-
-            item.appendChild(strip);
-
-            // ── PSNR badges ──────────────────────────────────
-            const psnrRow = document.createElement('div');
-            psnrRow.className = 'psnr-row';
-
-            const noiseBadge = document.createElement('span');
-            noiseBadge.className = 'psnr-badge psnr-noise';
-            noiseBadge.textContent = `Noisy: ${psnrNoisy.toFixed(1)} dB`;
-            psnrRow.appendChild(noiseBadge);
-
-            if (psnrMax !== null) {
-                const b = document.createElement('span');
-                b.className = 'psnr-badge psnr-max';
-                b.textContent = `Max: ${psnrMax.toFixed(1)} dB`;
-                // Mark winner with green border
-                if (psnrAvg === null || psnrMax >= psnrAvg) b.classList.add('psnr-winner');
-                psnrRow.appendChild(b);
-            }
-            if (psnrAvg !== null) {
-                const b = document.createElement('span');
-                b.className = 'psnr-badge psnr-avg';
-                b.textContent = `Avg: ${psnrAvg.toFixed(1)} dB`;
-                if (psnrMax === null || psnrAvg > psnrMax) b.classList.add('psnr-winner');
-                psnrRow.appendChild(b);
-            }
-
-            item.appendChild(psnrRow);
-            container.appendChild(item);
+        // Row 3: Average Pooling denoised
+        if (avgArr) {
+            container.appendChild(makeRow('Average Pooling', avgArr, psnrAvg));
         }
 
         // ── Update global PSNR summary ───────────────────────
