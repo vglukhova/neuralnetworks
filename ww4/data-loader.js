@@ -125,34 +125,39 @@ class MNISTDataLoader {
      * @param {number}  scale   — pixel multiplier (default 4 → 112×112 px)
      */
     draw28x28ToCanvas(tensor, canvas, scale = 4) {
-        tf.tidy(() => {
-            const ctx       = canvas.getContext('2d');
-            const imageData = new ImageData(28, 28);
-
-            // Flatten to [784] and denormalize to [0, 255]
-            const data = tensor.reshape([28, 28]).mul(255).clipByValue(0, 255).dataSync();
-
-            for (let i = 0; i < 784; i++) {
-                const v = data[i];
-                imageData.data[i * 4]     = v;   // R
-                imageData.data[i * 4 + 1] = v;   // G
-                imageData.data[i * 4 + 2] = v;   // B
-                imageData.data[i * 4 + 3] = 255; // A (fully opaque)
-            }
-
-            // Draw at native 28×28 first, then scale up
-            canvas.width  = 28 * scale;
-            canvas.height = 28 * scale;
-            ctx.imageSmoothingEnabled = false;  // keep pixels sharp
-
-            const tmp  = document.createElement('canvas');
-            tmp.width  = 28;
-            tmp.height = 28;
-            tmp.getContext('2d').putImageData(imageData, 0, 0);
-
-            ctx.drawImage(tmp, 0, 0, 28 * scale, 28 * scale);
-        });
-    }
+    tf.tidy(() => {
+        const ctx = canvas.getContext('2d');
+        const imageData = new ImageData(28, 28);
+        
+        // Убедимся, что тензор имеет правильную форму и получим данные
+        const tensor2d = tensor.reshape([28, 28]);
+        const data = tensor2d.mul(255).clipByValue(0, 255).dataSync();
+        
+        // Заполняем ImageData
+        for (let i = 0; i < 784; i++) {
+            const value = Math.round(data[i]); // Округляем до целого
+            imageData.data[i * 4] = value;     // R
+            imageData.data[i * 4 + 1] = value; // G
+            imageData.data[i * 4 + 2] = value; // B
+            imageData.data[i * 4 + 3] = 255;   // A
+        }
+        
+        // Устанавливаем размер canvas
+        canvas.width = 28 * scale;
+        canvas.height = 28 * scale;
+        
+        // Создаем временный canvas для масштабирования
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = 28;
+        tempCanvas.height = 28;
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.putImageData(imageData, 0, 0);
+        
+        // Масштабируем с отключенным сглаживанием для сохранения четкости
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height);
+    });
+}
 
     /** Dispose stored tensors to prevent memory leaks. */
     dispose() {
