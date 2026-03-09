@@ -126,23 +126,23 @@ class MNISTDataLoader {
      */
     draw28x28ToCanvas(tensor, canvas, scale = 4) {
         tf.tidy(() => {
-            const ctx       = canvas.getContext('2d');
             const imageData = new ImageData(28, 28);
 
             // Flatten to [784] and denormalize to [0, 255]
             const data = tensor.reshape([28, 28]).mul(255).clipByValue(0, 255).dataSync();
 
             for (let i = 0; i < 784; i++) {
-                const v = data[i];
+                const v = Math.round(data[i]);
                 imageData.data[i * 4]     = v;   // R
                 imageData.data[i * 4 + 1] = v;   // G
                 imageData.data[i * 4 + 2] = v;   // B
                 imageData.data[i * 4 + 3] = 255; // A (fully opaque)
             }
 
-            // Draw at native 28×28 first, then scale up
+            // Set dimensions first, then get context (avoids cleared/invalid context)
             canvas.width  = 28 * scale;
             canvas.height = 28 * scale;
+            const ctx = canvas.getContext('2d');
             ctx.imageSmoothingEnabled = false;  // keep pixels sharp
 
             const tmp  = document.createElement('canvas');
