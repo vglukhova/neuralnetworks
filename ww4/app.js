@@ -432,8 +432,9 @@ class DenoiserApp {
                 cell.className = 'img-cell';
 
                 const canvas = document.createElement('canvas');
-                // imageData is [28, 28, 1] — draw directly via dataLoader helper
-                const tensor = tf.tensor(imageData);
+                // imageData is [28, 28, 1] — flatten and use explicit shape for reliable rendering
+                const flat = imageData.flat(3);
+                const tensor = tf.tensor(flat, [28, 28, 1]);
                 this.dataLoader.draw28x28ToCanvas(tensor, canvas, 2);
                 tensor.dispose();
 
