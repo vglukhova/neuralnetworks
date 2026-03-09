@@ -46,17 +46,21 @@
         #progressBar   { height: 7px; background: #e0e0e0; border-radius: 4px; overflow: hidden; }
         #progressFill  { height: 100%; width: 0; background: #1565c0; transition: width .15s; }
 
-        /* results grid */
-        .preview-row  { display: flex; flex-wrap: wrap; gap: 12px; margin: 10px 0; }
-        .preview-item {
+        /* results grid — slide layout: rows of images */
+        .preview-row  { display: flex; flex-direction: column; gap: 16px; margin: 10px 0; }
+        .preview-row-slide {
             text-align: center; background: #fafafa;
-            border: 1px solid #ddd; border-radius: 4px; padding: 8px;
+            border: 1px solid #ddd; border-radius: 4px; padding: 10px;
         }
-        .preview-item .item-title {
-            font-size: .72rem; font-weight: bold;
-            text-transform: uppercase; color: #555; margin-bottom: 5px;
+        .preview-row-slide .row-label {
+            font-size: .85rem; font-weight: bold; color: #333;
+            margin-bottom: 6px;
         }
-        .img-strip { display: flex; gap: 4px; justify-content: center; }
+        .compare-label {
+            font-size: .9rem; font-weight: bold; color: #555;
+            text-align: center; margin: 8px 0; padding: 4px;
+        }
+        .img-strip { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
         .img-cell  { display: flex; flex-direction: column; align-items: center; gap: 2px; }
         .img-cell span { font-size: .6rem; color: #777; }
         canvas { image-rendering: pixelated; border: 1px solid #ccc; }
@@ -196,8 +200,7 @@
 
         <h2>Random 5 Preview</h2>
         <p style="font-size:.75rem;color:#777">
-            Each card: <b>Original</b> | <b>+Noise</b> | <b>Max</b> | <b>Avg</b>
-            — PSNR below (green border = winner per image)
+            Top: Noisy • Middle: Max Pooling • Bottom: Average Pooling
         </p>
         <div id="previewContainer" class="preview-row">
             <p style="color:#bbb">Train both models, then click "Test 5 Random"</p>
