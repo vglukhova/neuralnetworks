@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MNIST CNN Denoiser — Max vs Avg Pooling</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-vis@latest"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1   { font-size: 1.3rem; }
+        .container { display: flex; gap: 20px; }
+        .left-column  { width: 280px; flex-shrink: 0; }
+        .right-column { flex: 1; }
+
+        button { margin: 4px 4px 4px 0; padding: 7px 11px; cursor: pointer; }
+        .file-inputs { margin: 10px 0; }
+        .file-inputs label { display: block; margin: 4px 0; font-size: .85rem; }
+
+        .status {
+            background: #f0f0f0; padding: 10px;
+            margin: 10px 0; font-size: .82rem;
+        }
+        .status h3 { margin: 0 0 6px; font-size: .9rem; }
+
+        /* noise / epoch controls */
+        .param-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; font-size: .83rem; }
+        .param-row input[type=range] { flex: 1; }
+
+        /* training log */
+        #trainingLogs {
+            height: 160px; overflow-y: auto;
+            background: #1e1e1e; color: #a5d6a7;
+            font-family: monospace; font-size: .72rem;
+            padding: 8px; border-radius: 3px;
+        }
+        #trainingLogs .err { color: #ef9a9a; }
+
+        /* mini loss chart */
+        #lossChartCanvas {
+            display: block; margin: 8px 0;
+            border: 1px solid #ddd; background: #fff;
+        }
+
+        /* progress */
+        #progressWrap  { display: none; margin: 6px 0; }
+        #progressLabel { font-size: .75rem; color: #555; }
+        #progressBar   { height: 7px; background: #e0e0e0; border-radius: 4px; overflow: hidden; }
+        #progressFill  { height: 100%; width: 0; background: #1565c0; transition: width .15s; }
+
+        /* results grid */
+        .preview-row  { display: flex; flex-wrap: wrap; gap: 12px; margin: 10px 0; }
+        .preview-item {
+            text-align: center; background: #fafafa;
+            border: 1px solid #ddd; border-radius: 4px; padding: 8px;
+        }
+        .preview-item .item-title {
+            font-size: .72rem; font-weight: bold;
+            text-transform: uppercase; color: #555; margin-bottom: 5px;
+        }
+        .img-strip { display: flex; gap: 4px; justify-content: center; }
+        .img-cell  { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+        .img-cell span { font-size: .6rem; color: #777; }
+        canvas { image-rendering: pixelated; border: 1px solid #ccc; }
+
+        .psnr-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-top: 5px; }
+        .psnr-badge  { font-size: .65rem; font-weight: bold; padding: 2px 6px; border-radius: 10px; }
+        .psnr-noise  { background: #f3e5f5; color: #6a1b9a; }
+        .psnr-max    { background: #e3f2fd; color: #1565c0; }
+        .psnr-avg    { background: #fce4ec; color: #c62828; }
+        .psnr-winner { outline: 2px solid #2e7d32; }
+
+        /* summary metrics */
+        .metrics-row { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0; }
+        .metric-box  {
+            flex: 1; min-width: 100px; background: #f9f9f9;
+            border: 1px solid #ddd; border-radius: 4px; padding: 8px; text-align: center;
+        }
+        .metric-box .val { font-size: 1.3rem; font-weight: bold; }
+        .metric-box .lbl { font-size: .65rem; color: #777; margin-top: 2px; }
+        .metric-box.max   .val { color: #1565c0; }
+        .metric-box.avg   .val { color: #c62828; }
+        .metric-box.noise .val { color: #6a1b9a; }
+    </style>
+</head>
+<body>
+
+<h1>🧠 MNIST CNN Denoiser — Max Pooling vs Avg Pooling</h1>
+<p style="font-size:.8rem;color:#666">HW · Slide 33 · NNDL 2025 · HSE</p>
+
+<!-- ── File inputs ──────────────────────────────────────────────── -->
+<div class="file-inputs">
+    <label>Train CSV: <input type="file" id="trainFile" accept=".csv"></label>
+    <label>Test  CSV: <input type="file" id="testFile"  accept=".csv"></label>
+    <button id="loadDataBtn">Load Data</button>
+</div>
+
+<div class="container">
+
+    <!-- ══════════════ LEFT COLUMN ══════════════ -->
+    <div class="left-column">
+
+        <!-- Step 2: Noise level -->
+        <div class="status">
+            <h3>⚡ Step 2 — Noise level (σ)</h3>
+            <div class="param-row">
+                <input type="range" id="noiseSlider" min="0.05" max="0.6" step="0.05" value="0.3">
+                <span id="noiseVal" style="font-weight:bold;width:32px">0.30</span>
+            </div>
+            <div style="font-size:.72rem;color:#666">
+                Gaussian noise added to test images.<br>
+                Train pairs: noisy input → clean target.
+            </div>
+        </div>
+
+        <!-- Step 3: Training -->
+        <div class="status">
+            <h3>🏋️ Step 3 — Train</h3>
+            <div class="param-row">
+                Epochs:
+                <select id="epochSelect">
+                    <option value="5">5</option>
+                    <option value="10" selected>10</option>
+                    <option value="15">15</option>
+                    <option value="20">20</option>
+                </select>
+            </div>
+            <button id="trainMaxBtn">Train MAX Pooling</button>
+            <button id="trainAvgBtn">Train AVG Pooling</button>
+
+            <div id="progressWrap">
+                <div id="progressLabel">Epoch 0/0</div>
+                <div id="progressBar"><div id="progressFill"></div></div>
+            </div>
+        </div>
+
+        <!-- Step 4: Test & Save/Load -->
+        <div class="status">
+            <h3>🎲 Step 4 — Test &amp; Save/Load</h3>
+            <button id="testFiveBtn">Test 5 Random</button>
+            <br>
+            <button id="saveMaxBtn">Save MAX model</button>
+            <button id="saveAvgBtn">Save AVG model</button>
+            <br>
+            <label style="margin-top:6px;display:block">
+                Model JSON:    <input type="file" id="modelJsonFile"    accept=".json">
+            </label>
+            <label>
+                Model Weights: <input type="file" id="modelWeightsFile" accept=".bin">
+            </label>
+            <button id="loadMaxBtn">Load → MAX</button>
+            <button id="loadAvgBtn">Load → AVG</button>
+            <br>
+            <button id="resetBtn">Reset</button>
+            <button id="toggleVisorBtn">Toggle Visor</button>
+        </div>
+
+        <!-- Data status -->
+        <div id="dataStatus" class="status">
+            <h3>Data Status</h3>
+            <p>No data loaded</p>
+        </div>
+
+        <!-- Model info -->
+        <div id="modelInfo" class="status">
+            <h3>Model Info</h3>
+            <p>No model trained</p>
+        </div>
+
+    </div><!-- /left-column -->
+
+    <!-- ══════════════ RIGHT COLUMN ══════════════ -->
+    <div class="right-column">
+
+        <h2>Training Log</h2>
+        <canvas id="lossChartCanvas" width="520" height="110"></canvas>
+        <div id="trainingLogs"></div>
+
+        <h2>PSNR Summary (last 5 test images)</h2>
+        <div class="metrics-row">
+            <div class="metric-box noise">
+                <div class="val" id="metNoise">—</div>
+                <div class="lbl">Noisy PSNR (dB)</div>
+            </div>
+            <div class="metric-box max">
+                <div class="val" id="metMax">—</div>
+                <div class="lbl">Max Pool PSNR (dB)</div>
+            </div>
+            <div class="metric-box avg">
+                <div class="val" id="metAvg">—</div>
+                <div class="lbl">Avg Pool PSNR (dB)</div>
+            </div>
+            <div class="metric-box">
+                <div class="val" id="metWinner" style="font-size:1rem">—</div>
+                <div class="lbl">Better model</div>
+            </div>
+        </div>
+
+        <h2>Random 5 Preview</h2>
+        <p style="font-size:.75rem;color:#777">
+            Each card: <b>Original</b> | <b>+Noise</b> | <b>Max</b> | <b>Avg</b>
+            — PSNR below (green border = winner per image)
+        </p>
+        <div id="previewContainer" class="preview-row">
+            <p style="color:#bbb">Train both models, then click "Test 5 Random"</p>
+        </div>
+
+    </div><!-- /right-column -->
+
+</div><!-- /container -->
+
+<script src="data-loader.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
