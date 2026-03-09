@@ -1,8 +1,6 @@
 /**
  * data-loader.js
- * MNISTDataLoader — identical API to the original course file.
- * Parses MNIST CSV files in the browser using FileReader (no network requests).
- * CSV format: label (0-9) followed by 784 pixel values (0-255), no header row.
+ * MNISTDataLoader — исправленная версия
  */
 class MNISTDataLoader {
     constructor() {
@@ -14,8 +12,6 @@ class MNISTDataLoader {
      * Parse a single CSV file and return normalised tensors.
      * @param {File} file  — user-selected .csv File object
      * @returns {Promise<{xs: Tensor4D, ys: Tensor2D, count: number}>}
-     *   xs  — shape [N, 28, 28, 1], float32 in [0, 1]
-     *   ys  — shape [N, 10], one-hot encoded labels
      */
     async loadCSVFile(file) {
         return new Promise((resolve, reject) => {
@@ -24,19 +20,29 @@ class MNISTDataLoader {
             reader.onload = (event) => {
                 try {
                     const content = event.target.result;
-                    // Split into non-empty lines
+                    console.log('File loaded, length:', content.length);
+                    
+                    // Split into lines and filter out empty lines
                     const lines = content.split('\n').filter(line => line.trim() !== '');
+                    console.log('Number of lines:', lines.length);
 
                     const labels = [];
                     const pixels = [];
 
-                    for (const line of lines) {
+                    for (let i = 0; i < lines.length; i++) {
+                        const line = lines[i].trim();
+                        if (line === '') continue;
+                        
                         const values = line.split(',').map(Number);
-                        // Each row must have exactly: 1 label + 784 pixels = 785 values
-                        if (values.length !== 785) continue;
+                        
+                        // Check if we have the right number of values
+                        if (values.length !== 785) {
+                            console.warn(`Line ${i + 1}: expected 785 values, got ${values.length}`);
+                            continue;
+                        }
 
-                        labels.push(values[0]);           // integer class label
-                        pixels.push(values.slice(1));     // 784 pixel intensities
+                        labels.push(values[0]);
+                        pixels.push(values.slice(1));
                     }
 
                     if (labels.length === 0) {
@@ -44,19 +50,28 @@ class MNISTDataLoader {
                         return;
                     }
 
-                    // Build xs: normalize pixels to [0,1] and reshape to [N, 28, 28, 1]
-                    const xs = tf.tidy(() =>
-                        tf.tensor2d(pixels)
-                          .div(255)
-                          .reshape([labels.length, 28, 28, 1])
-                    );
+                    console.log(`Loaded ${labels.length} valid samples`);
 
-                    // Build ys: one-hot encode labels to depth 10
+                    // Create tensors
+                    const xs = tf.tidy(() => {
+                        // Create tensor from pixels array
+                        const pixelTensor = tf.tensor2d(pixels);
+                        // Normalize to [0,1] and reshape to [N, 28, 28, 1]
+                        return pixelTensor
+                            .div(255)
+                            .reshape([labels.length, 28, 28, 1]);
+                    });
+
                     const ys = tf.tidy(() => tf.oneHot(labels, 10));
 
-                    resolve({ xs, ys, count: labels.length });
+                    resolve({ 
+                        xs, 
+                        ys, 
+                        count: labels.length 
+                    });
 
                 } catch (error) {
+                    console.error('Error parsing CSV:', error);
                     reject(error);
                 }
             };
@@ -68,107 +83,125 @@ class MNISTDataLoader {
 
     /** Load and store training data from a user-selected file. */
     async loadTrainFromFiles(file) {
-        this.trainData = await this.loadCSVFile(file);
-        return this.trainData;
+        try {
+            console.log('Loading train file:', file.name);
+            const data = await this.loadCSVFile(file);
+            this.trainData = data;
+            console.log('Train data loaded:', data.count, 'samples');
+            return data;
+        } catch (error) {
+            console.error('Error loading train data:', error);
+            throw error;
+        }
     }
 
     /** Load and store test data from a user-selected file. */
     async loadTestFromFiles(file) {
-        this.testData = await this.loadCSVFile(file);
-        return this.testData;
+        try {
+            console.log('Loading test file:', file.name);
+            const data = await this.loadCSVFile(file);
+            this.testData = data;
+            console.log('Test data loaded:', data.count, 'samples');
+            return data;
+        } catch (error) {
+            console.error('Error loading test data:', error);
+            throw error;
+        }
     }
 
     /**
      * Split xs/ys into train and validation subsets.
-     * Uses tf.tidy so the original tensors are NOT consumed.
-     * @param {number} valRatio  — fraction reserved for validation (default 0.1)
-     * @returns {{ trainXs, trainYs, valXs, valYs }}
      */
     splitTrainVal(xs, ys, valRatio = 0.1) {
         return tf.tidy(() => {
-            const numVal   = Math.floor(xs.shape[0] * valRatio);
-            const numTrain = xs.shape[0] - numVal;
+            const total = xs.shape[0];
+            const numVal = Math.floor(total * valRatio);
+            const numTrain = total - numVal;
 
             return {
-                trainXs: xs.slice([0,       0, 0, 0], [numTrain, 28, 28, 1]),
-                trainYs: ys.slice([0,       0],        [numTrain, 10]),
-                valXs:   xs.slice([numTrain,0, 0, 0], [numVal,   28, 28, 1]),
-                valYs:   ys.slice([numTrain,0],        [numVal,   10]),
+                trainXs: xs.slice([0, 0, 0, 0], [numTrain, 28, 28, 1]),
+                trainYs: ys.slice([0, 0], [numTrain, 10]),
+                valXs: xs.slice([numTrain, 0, 0, 0], [numVal, 28, 28, 1]),
+                valYs: ys.slice([numTrain, 0], [numVal, 10]),
             };
         });
     }
 
     /**
-     * Sample k random images from the test set using a shuffled index array.
-     * Returns new tensors (not slices of the originals) so callers can dispose safely.
-     * @returns {{ batchXs: Tensor4D, batchYs: Tensor2D, indices: number[] }}
+     * Sample k random images from the test set.
      */
     getRandomTestBatch(xs, ys, k = 5) {
         return tf.tidy(() => {
-            // tf.util.createShuffledIndices returns a Uint32Array
-            const shuffled  = tf.util.createShuffledIndices(xs.shape[0]);
-            const selected  = Array.from(shuffled.slice(0, k));
-
+            const total = xs.shape[0];
+            // Generate random indices
+            const indices = [];
+            for (let i = 0; i < k; i++) {
+                indices.push(Math.floor(Math.random() * total));
+            }
+            
             return {
-                batchXs:  tf.gather(xs, selected),
-                batchYs:  tf.gather(ys, selected),
-                indices:  selected,
+                batchXs: tf.gather(xs, indices),
+                batchYs: tf.gather(ys, indices),
+                indices: indices,
             };
         });
     }
 
     /**
-     * Render a single [28, 28, 1] float32 tensor onto a canvas element.
-     * Uses a temporary 28×28 canvas then scales up with drawImage for sharpness.
-     * @param {Tensor}  tensor  — shape [28,28,1] or [28,28], values in [0,1]
-     * @param {HTMLCanvasElement} canvas
-     * @param {number}  scale   — pixel multiplier (default 4 → 112×112 px)
+     * Render a single [28, 28, 1] tensor onto a canvas element.
      */
     draw28x28ToCanvas(tensor, canvas, scale = 4) {
-    tf.tidy(() => {
-        const ctx = canvas.getContext('2d');
-        const imageData = new ImageData(28, 28);
-        
-        // Убедимся, что тензор имеет правильную форму и получим данные
-        const tensor2d = tensor.reshape([28, 28]);
-        const data = tensor2d.mul(255).clipByValue(0, 255).dataSync();
-        
-        // Заполняем ImageData
-        for (let i = 0; i < 784; i++) {
-            const value = Math.round(data[i]); // Округляем до целого
-            imageData.data[i * 4] = value;     // R
-            imageData.data[i * 4 + 1] = value; // G
-            imageData.data[i * 4 + 2] = value; // B
-            imageData.data[i * 4 + 3] = 255;   // A
-        }
-        
-        // Устанавливаем размер canvas
-        canvas.width = 28 * scale;
-        canvas.height = 28 * scale;
-        
-        // Создаем временный canvas для масштабирования
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = 28;
-        tempCanvas.height = 28;
-        const tempCtx = tempCanvas.getContext('2d');
-        tempCtx.putImageData(imageData, 0, 0);
-        
-        // Масштабируем с отключенным сглаживанием для сохранения четкости
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height);
-    });
-}
+        tf.tidy(() => {
+            // Ensure tensor is 2D [28, 28]
+            let tensor2d = tensor;
+            if (tensor.shape.length === 4) {
+                tensor2d = tensor.reshape([28, 28]);
+            } else if (tensor.shape.length === 3) {
+                tensor2d = tensor.reshape([28, 28]);
+            }
+            
+            // Get the data as a flat array
+            const data = tensor2d.mul(255).clipByValue(0, 255).dataSync();
+            
+            // Create ImageData
+            const imageData = new ImageData(28, 28);
+            
+            for (let i = 0; i < 784; i++) {
+                const value = Math.round(data[i]);
+                imageData.data[i * 4] = value;     // R
+                imageData.data[i * 4 + 1] = value; // G
+                imageData.data[i * 4 + 2] = value; // B
+                imageData.data[i * 4 + 3] = 255;   // A
+            }
+            
+            // Set canvas size
+            canvas.width = 28 * scale;
+            canvas.height = 28 * scale;
+            
+            // Create temporary canvas
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = 28;
+            tempCanvas.height = 28;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.putImageData(imageData, 0, 0);
+            
+            // Draw scaled
+            const ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height);
+        });
+    }
 
-    /** Dispose stored tensors to prevent memory leaks. */
+    /** Dispose stored tensors */
     dispose() {
         if (this.trainData) {
-            this.trainData.xs.dispose();
-            this.trainData.ys.dispose();
+            if (this.trainData.xs) this.trainData.xs.dispose();
+            if (this.trainData.ys) this.trainData.ys.dispose();
             this.trainData = null;
         }
         if (this.testData) {
-            this.testData.xs.dispose();
-            this.testData.ys.dispose();
+            if (this.testData.xs) this.testData.xs.dispose();
+            if (this.testData.ys) this.testData.ys.dispose();
             this.testData = null;
         }
     }
