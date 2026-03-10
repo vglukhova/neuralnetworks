@@ -362,50 +362,13 @@ class MNISTApp {
             m.add(tf.layers.averagePooling2d({ poolSize: 2, padding: 'same' }));
         }
         
-        // Bottleneck with more capacity
-        m.add(tf.layers.conv2d({ 
-            filters: 128, 
-            kernelSize: 3, 
-            activation: 'relu', 
-            padding: 'same' 
-        }));
-        
-        // Decoder
-        m.add(tf.layers.conv2dTranspose({ 
-            filters: 128, 
-            kernelSize: 3, 
-            strides: 2, 
-            activation: 'relu', 
-            padding: 'same' 
-        }));
-        
-        m.add(tf.layers.conv2dTranspose({ 
-            filters: 64, 
-            kernelSize: 3, 
-            strides: 2, 
-            activation: 'relu', 
-            padding: 'same' 
-        }));
-        
-        m.add(tf.layers.conv2d({ 
-            filters: 32, 
-            kernelSize: 3, 
-            activation: 'relu', 
-            padding: 'same' 
-        }));
-        
-        m.add(tf.layers.conv2d({ 
-            filters: 1, 
-            kernelSize: 3, 
-            activation: 'sigmoid', 
-            padding: 'same' 
-        }));
-        
-        m.compile({ 
-            optimizer: tf.train.adam(0.001), 
-            loss: 'meanSquaredError' 
-        });
-        
+        // Decoder — upSampling2d avoids conv2dTranspose NaN bug in TF.js WebGL
+        m.add(tf.layers.upSampling2d({ size: [2, 2] }));
+        m.add(tf.layers.conv2d({ filters: 64, kernelSize: 3, activation: 'relu', padding: 'same' }));
+        m.add(tf.layers.upSampling2d({ size: [2, 2] }));
+        m.add(tf.layers.conv2d({ filters: 32, kernelSize: 3, activation: 'relu', padding: 'same' }));
+        m.add(tf.layers.conv2d({ filters: 1,  kernelSize: 3, activation: 'sigmoid', padding: 'same' }));
+        m.compile({ optimizer: 'adam', loss: 'meanSquaredError' });
         return m;
     }
 
