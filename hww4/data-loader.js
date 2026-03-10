@@ -58,29 +58,30 @@ class MNISTDataLoader {
         return this.testData;
     }
 
-    // Add Gaussian noise, clip to [0,1]
+    // Add Gaussian noise, clip to [0,1]  (NO tf.tidy — caller owns result)
     addNoise(xs, stddev) {
         stddev = stddev || 0.3;
-        return tf.tidy(() =>
-            xs.add(tf.randomNormal(xs.shape, 0, stddev)).clipByValue(0, 1)
-        );
+        const noise = tf.randomNormal(xs.shape, 0, stddev);
+        const result = xs.add(noise).clipByValue(0, 1);
+        noise.dispose();
+        return result;
     }
 
-    // Split into train / validation
+    // Split into train / validation  (NO tf.tidy — callers own the tensors)
     splitTrainVal(xs, ys, valRatio) {
         valRatio = valRatio || 0.1;
         const total  = xs.shape[0];
         const numVal = Math.floor(total * valRatio);
         const numTrn = total - numVal;
-        return tf.tidy(() => ({
+        return {
             trainXs: xs.slice([0,      0, 0, 0], [numTrn, 28, 28, 1]),
             trainYs: ys.slice([0,      0],        [numTrn, 10]),
             valXs:   xs.slice([numTrn, 0, 0, 0], [numVal, 28, 28, 1]),
             valYs:   ys.slice([numTrn, 0],        [numVal, 10]),
-        }));
+        };
     }
 
-    // Pick k random samples
+    // Pick k random samples  (NO tf.tidy — caller owns tensors)
     getRandomTestBatch(xs, ys, k) {
         k = k || 5;
         const all = [];
@@ -90,24 +91,35 @@ class MNISTDataLoader {
             const tmp = all[i]; all[i] = all[j]; all[j] = tmp;
         }
         const indices = all.slice(0, k);
-        return tf.tidy(() => ({
+        return {
             batchXs: tf.gather(xs, indices),
             batchYs: tf.gather(ys, indices),
             indices: indices,
-        }));
+        };
     }
 
-    // Draw [28,28,1] tensor to canvas
-    drawToCanvas(tensor, canvas, scale) {
+    // Draw image to canvas. img can be a flat/nested JS array or a tf.Tensor [28,28,1] or [28,28]
+    drawToCanvas(img, canvas, scale) {
         scale = scale || 4;
-        const data = tf.tidy(() =>
-            tensor.reshape([28, 28]).mul(255).clipByValue(0, 255).dataSync()
-        );
+
+        // If a tensor is passed, extract data and dispose it
+        let flat;
+        if (img instanceof tf.Tensor) {
+            flat = Array.from(img.reshape([784]).dataSync());
+            img.dispose();
+        } else {
+            // Flatten nested array (shape [28,28,1] or [28,28])
+            flat = img.flat ? img.flat(Infinity) : [].concat(...img.map(row =>
+                Array.isArray(row[0]) ? [].concat(...row) : row
+            ));
+        }
+
         const imgData = new ImageData(28, 28);
         for (let i = 0; i < 784; i++) {
-            imgData.data[i * 4]     = data[i];
-            imgData.data[i * 4 + 1] = data[i];
-            imgData.data[i * 4 + 2] = data[i];
+            const v = Math.round(flat[i] * 255);
+            imgData.data[i * 4]     = v;
+            imgData.data[i * 4 + 1] = v;
+            imgData.data[i * 4 + 2] = v;
             imgData.data[i * 4 + 3] = 255;
         }
         const tmp = document.createElement('canvas');
