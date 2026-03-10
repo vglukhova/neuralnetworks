@@ -1,17 +1,16 @@
 class MNISTDataLoader {
 
-    // Load CSV file: each row = label, px0..px783  (785 values, no header)
+    // Load CSV: rows = label, px0..px783  (785 cols, no header)
     async loadCSVFile(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
-            reader.onerror = () => reject(new Error('Failed to read file'));
+            reader.onerror = () => reject(new Error('Cannot read file'));
             reader.onload = (e) => {
                 try {
                     const lines = e.target.result
-                        .replace(/\r\n/g, '\n')
-                        .replace(/\r/g, '\n')
+                        .replace(/\r\n/g, '\n').replace(/\r/g, '\n')
                         .split('\n')
-                        .filter(l => l.trim().length > 0);
+                        .filter(l => l.trim() !== '');
 
                     const labels = [];
                     const pixels = [];
@@ -26,122 +25,119 @@ class MNISTDataLoader {
                     }
 
                     if (labels.length === 0) {
-                        reject(new Error('No valid rows found in CSV'));
-                        return;
+                        reject(new Error('No valid rows in CSV')); return;
                     }
 
-                    const xs = tf.tidy(() =>
-                        tf.tensor2d(pixels, [labels.length, 784])
-                            .div(255)
-                            .reshape([labels.length, 28, 28, 1])
-                    );
-                    const ys = tf.tidy(() =>
-                        tf.oneHot(tf.tensor1d(labels, 'int32'), 10)
-                    );
+                    // Build tensors WITHOUT tf.tidy — they must survive outside this function
+                    const pixelTensor = tf.tensor2d(pixels, [labels.length, 784]);
+                    const xs = pixelTensor.div(255).reshape([labels.length, 28, 28, 1]);
+                    pixelTensor.dispose();
+
+                    const labelTensor = tf.tensor1d(labels, 'int32');
+                    const ys = tf.oneHot(labelTensor, 10);
+                    labelTensor.dispose();
 
                     resolve({ xs, ys, count: labels.length });
-                } catch (err) {
-                    reject(err);
-                }
+                } catch (err) { reject(err); }
             };
             reader.readAsText(file);
         });
     }
 
     async loadTrainFromFiles(file) {
+        if (this.trainData) {
+            this.trainData.xs.dispose();
+            this.trainData.ys.dispose();
+        }
         this.trainData = await this.loadCSVFile(file);
         return this.trainData;
     }
 
     async loadTestFromFiles(file) {
+        if (this.testData) {
+            this.testData.xs.dispose();
+            this.testData.ys.dispose();
+        }
         this.testData = await this.loadCSVFile(file);
         return this.testData;
     }
 
-    // Add Gaussian noise, clip to [0,1]  (NO tf.tidy — caller owns result)
+    // Add Gaussian noise — NO tf.tidy, caller disposes result
     addNoise(xs, stddev) {
         stddev = stddev || 0.3;
-        const noise = tf.randomNormal(xs.shape, 0, stddev);
-        const result = xs.add(noise).clipByValue(0, 1);
+        const noise  = tf.randomNormal(xs.shape, 0, stddev);
+        const noisy  = xs.add(noise).clipByValue(0, 1);
         noise.dispose();
-        return result;
+        return noisy;
     }
 
-    // Split into train / validation  (NO tf.tidy — callers own the tensors)
+    // Split train/val — NO tf.tidy, caller disposes all 4 tensors
     splitTrainVal(xs, ys, valRatio) {
         valRatio = valRatio || 0.1;
-        const total  = xs.shape[0];
-        const numVal = Math.floor(total * valRatio);
-        const numTrn = total - numVal;
+        const n    = xs.shape[0];
+        const nVal = Math.floor(n * valRatio);
+        const nTrn = n - nVal;
         return {
-            trainXs: xs.slice([0,      0, 0, 0], [numTrn, 28, 28, 1]),
-            trainYs: ys.slice([0,      0],        [numTrn, 10]),
-            valXs:   xs.slice([numTrn, 0, 0, 0], [numVal, 28, 28, 1]),
-            valYs:   ys.slice([numTrn, 0],        [numVal, 10]),
+            trainXs: xs.slice([0,    0,0,0], [nTrn, 28,28,1]),
+            trainYs: ys.slice([0,    0],     [nTrn, 10]),
+            valXs:   xs.slice([nTrn, 0,0,0], [nVal, 28,28,1]),
+            valYs:   ys.slice([nTrn, 0],     [nVal, 10]),
         };
     }
 
-    // Pick k random samples  (NO tf.tidy — caller owns tensors)
+    // Random batch of k samples — NO tf.tidy, caller disposes
     getRandomTestBatch(xs, ys, k) {
         k = k || 5;
-        const all = [];
-        for (let i = 0; i < xs.shape[0]; i++) all.push(i);
-        for (let i = all.length - 1; i > 0; i--) {
+        const idx = Array.from({length: xs.shape[0]}, (_, i) => i);
+        for (let i = idx.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
-            const tmp = all[i]; all[i] = all[j]; all[j] = tmp;
+            [idx[i], idx[j]] = [idx[j], idx[i]];
         }
-        const indices = all.slice(0, k);
+        const sel = idx.slice(0, k);
         return {
-            batchXs: tf.gather(xs, indices),
-            batchYs: tf.gather(ys, indices),
-            indices: indices,
+            batchXs: tf.gather(xs, sel),
+            batchYs: tf.gather(ys, sel),
+            indices: sel,
         };
     }
 
-    // Draw image to canvas. img can be a flat/nested JS array or a tf.Tensor [28,28,1] or [28,28]
-    drawToCanvas(img, canvas, scale) {
+    // Draw a single image to canvas.
+    // imgArray = plain JS nested array shape [28][28][1] (values 0..1)
+    drawToCanvas(imgArray, canvas, scale) {
         scale = scale || 4;
 
-        // If a tensor is passed, extract data and dispose it
-        let flat;
-        if (img instanceof tf.Tensor) {
-            flat = Array.from(img.reshape([784]).dataSync());
-            img.dispose();
-        } else {
-            // Flatten nested array (shape [28,28,1] or [28,28])
-            flat = img.flat ? img.flat(Infinity) : [].concat(...img.map(row =>
-                Array.isArray(row[0]) ? [].concat(...row) : row
-            ));
+        // Flatten [28][28][1] → 784 values
+        const flat = [];
+        for (let r = 0; r < 28; r++) {
+            for (let c = 0; c < 28; c++) {
+                // imgArray[r][c] is either [v] (shape [28,28,1]) or v (shape [28,28])
+                const v = Array.isArray(imgArray[r][c]) ? imgArray[r][c][0] : imgArray[r][c];
+                flat.push(v);
+            }
         }
 
         const imgData = new ImageData(28, 28);
         for (let i = 0; i < 784; i++) {
-            const v = Math.round(flat[i] * 255);
+            const v = Math.min(255, Math.max(0, Math.round(flat[i] * 255)));
             imgData.data[i * 4]     = v;
             imgData.data[i * 4 + 1] = v;
             imgData.data[i * 4 + 2] = v;
             imgData.data[i * 4 + 3] = 255;
         }
+
         const tmp = document.createElement('canvas');
         tmp.width = 28; tmp.height = 28;
         tmp.getContext('2d').putImageData(imgData, 0, 0);
+
         canvas.width  = 28 * scale;
         canvas.height = 28 * scale;
         const ctx = canvas.getContext('2d');
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(tmp, 0, 0, 28 * scale, 28 * scale);
+        ctx.drawImage(tmp, 0, 0, canvas.width, canvas.height);
     }
 
     dispose() {
-        if (this.trainData) {
-            this.trainData.xs.dispose();
-            this.trainData.ys.dispose();
-            this.trainData = null;
-        }
-        if (this.testData) {
-            this.testData.xs.dispose();
-            this.testData.ys.dispose();
-            this.testData = null;
-        }
+        if (this.trainData) { this.trainData.xs.dispose(); this.trainData.ys.dispose(); this.trainData = null; }
+        if (this.testData)  { this.testData.xs.dispose();  this.testData.ys.dispose();  this.testData  = null; }
     }
 }
