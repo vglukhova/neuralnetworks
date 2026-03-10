@@ -36,9 +36,8 @@ class MNISTApp {
     async onLoadData() {
         const trainFile = document.getElementById('trainFile').files[0];
         const testFile  = document.getElementById('testFile').files[0];
-        if (!trainFile || !testFile) {
+        if (!trainFile || !testFile)
             return this.log('ERROR: Select both Train and Test CSV files.');
-        }
         try {
             this.log('Loading train CSV…');
             this.trainData = await this.loader.loadTrainFromFiles(trainFile);
@@ -48,9 +47,7 @@ class MNISTApp {
             document.getElementById('dataStatus').innerHTML =
                 '<b>Train:</b> ' + this.trainData.count + ' samples<br>' +
                 '<b>Test:</b> '  + this.testData.count  + ' samples';
-        } catch (err) {
-            this.log('ERROR: ' + err.message);
-        }
+        } catch (err) { this.log('ERROR: ' + err.message); }
     }
 
     // ── Classifier ────────────────────────────────────────────────────────────
@@ -64,11 +61,13 @@ class MNISTApp {
             this.classifier = this.buildClassifier();
             this.log('Training classifier…');
 
-            const split = this.loader.splitTrainVal(this.trainData.xs, this.trainData.ys, 0.1);
+            // splitTrainVal returns INDEPENDENT tensors (not slices)
+            const sp = this.loader.splitTrainVal(this.trainData.xs, this.trainData.ys, 0.1);
+
             const t0 = Date.now();
-            const hist = await this.classifier.fit(split.trainXs, split.trainYs, {
+            const hist = await this.classifier.fit(sp.trainXs, sp.trainYs, {
                 epochs: 5, batchSize: 128,
-                validationData: [split.valXs, split.valYs],
+                validationData: [sp.valXs, sp.valYs],
                 shuffle: true,
                 callbacks: tfvis.show.fitCallbacks(
                     { name: 'Classifier', tab: 'Training' },
@@ -76,8 +75,9 @@ class MNISTApp {
                     { callbacks: ['onEpochEnd'] }
                 )
             });
-            split.trainXs.dispose(); split.trainYs.dispose();
-            split.valXs.dispose();   split.valYs.dispose();
+
+            sp.trainXs.dispose(); sp.trainYs.dispose();
+            sp.valXs.dispose();   sp.valYs.dispose();
 
             const best = Math.max.apply(null, hist.history.val_acc);
             this.log('Classifier done in ' + ((Date.now()-t0)/1000).toFixed(1) +
@@ -85,9 +85,7 @@ class MNISTApp {
             this.updateModelInfo();
         } catch (err) {
             this.log('ERROR: ' + err.message);
-        } finally {
-            this.isTraining = false;
-        }
+        } finally { this.isTraining = false; }
     }
 
     async onEvaluate() {
@@ -98,8 +96,7 @@ class MNISTApp {
             const preds  = this.classifier.predict(this.testData.xs);
             const predLb = preds.argMax(-1);
             const trueLb = this.testData.ys.argMax(-1);
-            const eq     = predLb.equal(trueLb);
-            const acc    = (await eq.mean().data())[0];
+            const acc    = (await predLb.equal(trueLb).mean().data())[0];
             this.log('Test accuracy: ' + (acc * 100).toFixed(2) + '%');
 
             const predArr = await predLb.array();
@@ -110,11 +107,8 @@ class MNISTApp {
                 { name: 'Confusion Matrix', tab: 'Evaluation' },
                 { values: cm, tickLabels: ['0','1','2','3','4','5','6','7','8','9'] }
             );
-
-            preds.dispose(); predLb.dispose(); trueLb.dispose(); eq.dispose();
-        } catch (err) {
-            this.log('ERROR: ' + err.message);
-        }
+            preds.dispose(); predLb.dispose(); trueLb.dispose();
+        } catch (err) { this.log('ERROR: ' + err.message); }
     }
 
     // ── Autoencoders ──────────────────────────────────────────────────────────
@@ -130,18 +124,12 @@ class MNISTApp {
             this.aeMax = this.buildAutoencoder('max');
             this.aeAvg = this.buildAutoencoder('avg');
 
-            // Create noisy version — NO tf.tidy, we manage lifetime manually
+            // Build noisy version of training data
             const noisy = this.loader.addNoise(this.trainData.xs, this.noiseStddev);
 
-            const n    = this.trainData.xs.shape[0];
-            const nVal = Math.floor(n * 0.1);
-            const nTrn = n - nVal;
-
-            // Slice clean and noisy for train and val sets — NO tf.tidy
-            const trnNoisy = noisy.slice([0,    0,0,0], [nTrn, 28,28,1]);
-            const trnClean = this.trainData.xs.slice([0,    0,0,0], [nTrn, 28,28,1]);
-            const valNoisy = noisy.slice([nTrn, 0,0,0], [nVal, 28,28,1]);
-            const valClean = this.trainData.xs.slice([nTrn, 0,0,0], [nVal, 28,28,1]);
+            // Split into train/val — INDEPENDENT tensors, not views
+            const sp = this.loader.splitNoisyClean(this.trainData.xs, noisy, 0.1);
+            noisy.dispose(); // done with the full noisy tensor
 
             const makeCb = (name) => tfvis.show.fitCallbacks(
                 { name: name, tab: 'Autoencoders' },
@@ -151,9 +139,9 @@ class MNISTApp {
 
             this.log('Training Max-Pooling Autoencoder…');
             let t = Date.now();
-            await this.aeMax.fit(trnNoisy, trnClean, {
+            await this.aeMax.fit(sp.trnNoisy, sp.trnClean, {
                 epochs: 10, batchSize: 128,
-                validationData: [valNoisy, valClean],
+                validationData: [sp.valNoisy, sp.valClean],
                 shuffle: true,
                 callbacks: makeCb('AE Max Pooling')
             });
@@ -161,26 +149,22 @@ class MNISTApp {
 
             this.log('Training Avg-Pooling Autoencoder…');
             t = Date.now();
-            await this.aeAvg.fit(trnNoisy, trnClean, {
+            await this.aeAvg.fit(sp.trnNoisy, sp.trnClean, {
                 epochs: 10, batchSize: 128,
-                validationData: [valNoisy, valClean],
+                validationData: [sp.valNoisy, sp.valClean],
                 shuffle: true,
                 callbacks: makeCb('AE Avg Pooling')
             });
             this.log('Avg-AE done in ' + ((Date.now()-t)/1000).toFixed(1) + 's');
 
-            // Dispose all temporary tensors
-            noisy.dispose();
-            trnNoisy.dispose(); trnClean.dispose();
-            valNoisy.dispose(); valClean.dispose();
+            sp.trnNoisy.dispose(); sp.trnClean.dispose();
+            sp.valNoisy.dispose(); sp.valClean.dispose();
 
             this.updateModelInfo();
             this.log('Both autoencoders trained. Click "Test 5 Random" to see results.');
         } catch (err) {
             this.log('ERROR: ' + err.message);
-        } finally {
-            this.isTraining = false;
-        }
+        } finally { this.isTraining = false; }
     }
 
     // ── Test 5 Random ─────────────────────────────────────────────────────────
@@ -189,38 +173,29 @@ class MNISTApp {
         if (!this.testData)             return this.log('ERROR: Load test data first.');
         if (!this.aeMax || !this.aeAvg) return this.log('ERROR: Train autoencoders first.');
         try {
-            // Get random batch — no tf.tidy
             const { batchXs, batchYs } = this.loader.getRandomTestBatch(
                 this.testData.xs, this.testData.ys, 5
             );
 
-            // Add noise
-            const noisy = this.loader.addNoise(batchXs, this.noiseStddev);
-
-            // Run both autoencoders
+            const noisy  = this.loader.addNoise(batchXs, this.noiseStddev);
             const outMax = this.aeMax.predict(noisy);
             const outAvg = this.aeAvg.predict(noisy);
 
-            // Extract labels
-            const lblT    = batchYs.argMax(-1);
-            const lblArr  = await lblT.array();
+            // Labels
+            const lblT   = batchYs.argMax(-1);
+            const lblArr = await lblT.array();
             lblT.dispose();
 
-            // Convert tensors to plain JS arrays BEFORE any dispose
-            const noisyArr = await noisy.array();   // [5][28][28][1]
-            const maxArr   = await outMax.array();  // [5][28][28][1]
-            const avgArr   = await outAvg.array();  // [5][28][28][1]
+            // To JS arrays BEFORE any dispose
+            const noisyArr = await noisy.array();
+            const maxArr   = await outMax.array();
+            const avgArr   = await outAvg.array();
 
-            // Now safe to dispose
             batchXs.dispose(); batchYs.dispose();
             noisy.dispose(); outMax.dispose(); outAvg.dispose();
 
-            // Render using plain JS arrays only
             this.renderPreview(noisyArr, maxArr, avgArr, lblArr);
-
-        } catch (err) {
-            this.log('ERROR: ' + err.message);
-        }
+        } catch (err) { this.log('ERROR: ' + err.message); }
     }
 
     renderPreview(noisyArr, maxArr, avgArr, lblArr) {
@@ -240,7 +215,6 @@ class MNISTApp {
                 hdr.textContent = 'Compare Max Pooling vs Average Pooling';
                 container.appendChild(hdr);
             }
-
             const block = document.createElement('div');
             block.className = 'preview-block';
 
@@ -253,19 +227,14 @@ class MNISTApp {
             const rowEl = document.createElement('div');
             rowEl.className = 'preview-row';
 
-            // row.data[i] is shape [28][28][1]
             row.data.forEach((imgData, i) => {
                 const item   = document.createElement('div');
                 item.className = 'preview-item';
-
                 const canvas = document.createElement('canvas');
-                // Pass plain nested array — drawToCanvas handles [28][28][1]
                 this.loader.drawToCanvas(imgData, canvas, 4);
-
                 const cap = document.createElement('div');
                 cap.className = 'caption';
                 cap.textContent = 'Label: ' + lblArr[i];
-
                 item.appendChild(canvas);
                 item.appendChild(cap);
                 rowEl.appendChild(item);
@@ -307,8 +276,8 @@ class MNISTApp {
         if (this.aeAvg)      { this.aeAvg.dispose();      this.aeAvg      = null; }
         this.loader.dispose();
         this.trainData = null; this.testData = null;
-        document.getElementById('dataStatus').textContent    = 'No data loaded';
-        document.getElementById('modelInfo').textContent     = 'No model';
+        document.getElementById('dataStatus').textContent     = 'No data loaded';
+        document.getElementById('modelInfo').textContent      = 'No model';
         document.getElementById('previewContainer').innerHTML = '';
         this.log('Reset done.');
     }
@@ -331,7 +300,6 @@ class MNISTApp {
 
     buildAutoencoder(poolType) {
         const m = tf.sequential();
-        // Encoder
         m.add(tf.layers.conv2d({ inputShape:[28,28,1], filters:32, kernelSize:3, activation:'relu', padding:'same' }));
         if (poolType === 'max') {
             m.add(tf.layers.maxPooling2d({ poolSize:2, padding:'same' }));
@@ -344,7 +312,6 @@ class MNISTApp {
         } else {
             m.add(tf.layers.averagePooling2d({ poolSize:2, padding:'same' }));
         }
-        // Decoder
         m.add(tf.layers.conv2dTranspose({ filters:64, kernelSize:3, strides:2, activation:'relu',    padding:'same' }));
         m.add(tf.layers.conv2dTranspose({ filters:32, kernelSize:3, strides:2, activation:'relu',    padding:'same' }));
         m.add(tf.layers.conv2d({          filters:1,  kernelSize:3,            activation:'sigmoid', padding:'same' }));
@@ -357,9 +324,9 @@ class MNISTApp {
     updateModelInfo() {
         const p = (m) => { let n=0; m.layers.forEach(l => l.getWeights().forEach(w => n+=w.size)); return n; };
         let html = '';
-        if (this.classifier) html += 'Classifier: '   + p(this.classifier).toLocaleString() + ' params<br>';
-        if (this.aeMax)      html += 'AE Max-Pool: '  + p(this.aeMax).toLocaleString()      + ' params<br>';
-        if (this.aeAvg)      html += 'AE Avg-Pool: '  + p(this.aeAvg).toLocaleString()      + ' params<br>';
+        if (this.classifier) html += 'Classifier: '  + p(this.classifier).toLocaleString() + ' params<br>';
+        if (this.aeMax)      html += 'AE Max-Pool: ' + p(this.aeMax).toLocaleString()      + ' params<br>';
+        if (this.aeAvg)      html += 'AE Avg-Pool: ' + p(this.aeAvg).toLocaleString()      + ' params<br>';
         document.getElementById('modelInfo').innerHTML = html || 'No model';
     }
 
