@@ -12,14 +12,18 @@ class MNISTDataLoader {
             reader.onload = (event) => {
                 try {
                     const content = event.target.result;
-                    const lines = content.split('\n').filter(line => line.trim() !== '');
+                    // Handle \r\n and \r line endings
+                    const lines = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+                        .split('\n').filter(line => line.trim() !== '');
                     
                     const labels = [];
                     const pixels = [];
                     
                     for (const line of lines) {
-                        const values = line.split(',').map(Number);
+                        const values = line.trim().split(',').map(v => parseFloat(v.trim()));
+                        // Skip header row or malformed rows
                         if (values.length !== 785) continue; // label + 784 pixels
+                        if (isNaN(values[0])) continue; // skip header
                         
                         labels.push(values[0]);
                         pixels.push(values.slice(1));
