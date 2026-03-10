@@ -181,26 +181,31 @@ class MNISTApp {
     }
 
     async onTestFive() {
-        if (!this.testData)        return this.log('ERROR: Load test data first.');
+        if (!this.testData)             return this.log('ERROR: Load test data first.');
         if (!this.aeMax || !this.aeAvg) return this.log('ERROR: Train autoencoders first.');
         try {
             const { batchXs, batchYs } = this.loader.getRandomTestBatch(
                 this.testData.xs, this.testData.ys, 5
             );
-            const noisy      = this.loader.addNoise(batchXs, this.noiseStddev);
+            const noisy       = this.loader.addNoise(batchXs, this.noiseStddev);
             const denoisedMax = this.aeMax.predict(noisy);
             const denoisedAvg = this.aeAvg.predict(noisy);
 
-            const trueArr = await batchYs.argMax(-1).array();
+            // Get labels BEFORE disposing tensors
+            const lblTensor = batchYs.argMax(-1);
+            const trueArr   = await lblTensor.array();
+            lblTensor.dispose();
 
+            // Convert to plain JS arrays (values in [0,1])
             const noisyData = await noisy.array();
             const maxData   = await denoisedMax.array();
             const avgData   = await denoisedAvg.array();
 
+            // Render using plain arrays — no tensors involved
             this.renderPreview(noisyData, maxData, avgData, trueArr);
 
-            batchXs.dispose(); batchYs.dispose(); noisy.dispose();
-            denoisedMax.dispose(); denoisedAvg.dispose();
+            batchXs.dispose(); batchYs.dispose();
+            noisy.dispose(); denoisedMax.dispose(); denoisedAvg.dispose();
         } catch (err) {
             this.log('ERROR: ' + err.message);
         }
@@ -241,7 +246,8 @@ class MNISTApp {
                 item.className = 'preview-item';
 
                 const canvas = document.createElement('canvas');
-                this.loader.drawToCanvas(tf.tensor(img), canvas, 4);
+                // img is a plain JS array [28][28][1] — drawToCanvas handles flattening
+                this.loader.drawToCanvas(img, canvas, 4);
 
                 const cap = document.createElement('div');
                 cap.className = 'caption';
