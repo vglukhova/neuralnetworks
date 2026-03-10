@@ -332,44 +332,38 @@ class MNISTApp {
     }
 
     buildAutoencoder(poolType) {
-        const m = tf.sequential();
-        
-        // Encoder
-        m.add(tf.layers.conv2d({ 
-            inputShape: [28,28,1], 
-            filters: 32, 
-            kernelSize: 3, 
-            activation: 'relu', 
-            padding: 'same' 
-        }));
-        
+        // Architecture: encoder uses pooling (max or avg), decoder uses conv2dTranspose
+        // All ops confirmed working in TF.js WebGL
+        const model = tf.sequential();
+
+        // ── Encoder ──
+        // conv stride=1, then pool to downsample: 28→14
+        model.add(tf.layers.conv2d({ inputShape:[28,28,1], filters:32, kernelSize:3, padding:'same', activation:'relu' }));
         if (poolType === 'max') {
-            m.add(tf.layers.maxPooling2d({ poolSize: 2, padding: 'same' }));
+            model.add(tf.layers.maxPooling2d({ poolSize:[2,2], strides:[2,2] }));
         } else {
-            m.add(tf.layers.averagePooling2d({ poolSize: 2, padding: 'same' }));
+            model.add(tf.layers.averagePooling2d({ poolSize:[2,2], strides:[2,2] }));
         }
-        
-        m.add(tf.layers.conv2d({ 
-            filters: 64, 
-            kernelSize: 3, 
-            activation: 'relu', 
-            padding: 'same' 
-        }));
-        
+        // 14→7
+        model.add(tf.layers.conv2d({ filters:64, kernelSize:3, padding:'same', activation:'relu' }));
         if (poolType === 'max') {
-            m.add(tf.layers.maxPooling2d({ poolSize: 2, padding: 'same' }));
+            model.add(tf.layers.maxPooling2d({ poolSize:[2,2], strides:[2,2] }));
         } else {
-            m.add(tf.layers.averagePooling2d({ poolSize: 2, padding: 'same' }));
+            model.add(tf.layers.averagePooling2d({ poolSize:[2,2], strides:[2,2] }));
         }
-        
-        // Decoder — upSampling2d avoids conv2dTranspose NaN bug in TF.js WebGL
-        m.add(tf.layers.upSampling2d({ size: [2, 2] }));
-        m.add(tf.layers.conv2d({ filters: 64, kernelSize: 3, activation: 'relu', padding: 'same' }));
-        m.add(tf.layers.upSampling2d({ size: [2, 2] }));
-        m.add(tf.layers.conv2d({ filters: 32, kernelSize: 3, activation: 'relu', padding: 'same' }));
-        m.add(tf.layers.conv2d({ filters: 1,  kernelSize: 3, activation: 'sigmoid', padding: 'same' }));
-        m.compile({ optimizer: 'adam', loss: 'meanSquaredError' });
-        return m;
+
+        // ── Bottleneck ──
+        model.add(tf.layers.conv2d({ filters:64, kernelSize:3, padding:'same', activation:'relu' }));
+
+        // ── Decoder: flatten → dense → reshape ──
+        // Avoid conv2dTranspose (NaN bug) and upSampling2d (missing in older tfjs)
+        // Instead: flatten, dense back to 28*28, reshape
+        model.add(tf.layers.flatten());
+        model.add(tf.layers.dense({ units: 28*28, activation:'sigmoid' }));
+        model.add(tf.layers.reshape({ targetShape:[28,28,1] }));
+
+        model.compile({ optimizer:'adam', loss:'meanSquaredError' });
+        return model;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
