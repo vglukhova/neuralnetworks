@@ -81,7 +81,7 @@ class MNISTApp {
 
             const best = Math.max.apply(null, hist.history.val_acc);
             this.log('Classifier done in ' + ((Date.now()-t0)/1000).toFixed(1) +
-                     's  |  best val_acc: ' + best.toFixed(4));
+                     's  |  best val_acc: ' + (best * 100).toFixed(2) + '%');
             this.updateModelInfo();
         } catch (err) {
             this.log('ERROR: ' + err.message);
@@ -125,7 +125,7 @@ class MNISTApp {
             this.aeAvg = this.buildAutoencoder('avg');
 
             // Build noisy version of training data
-            this.log('Adding noise with stddev = ' + this.noiseStdfix);
+            this.log('Adding noise with stddev = ' + this.noiseStddev.toFixed(2));
             const noisy = this.loader.addNoise(this.trainData.xs, this.noiseStddev);
 
             // Split into train/val — INDEPENDENT tensors
@@ -134,29 +134,46 @@ class MNISTApp {
 
             this.log('Train samples: ' + sp.trnClean.shape[0] + ', Val samples: ' + sp.valClean.shape[0]);
 
-            const makeCb = (name) => tfvis.show.fitCallbacks(
-                { name: name, tab: 'Autoencoders' },
-                ['loss', 'val_loss'],
-                { callbacks: ['onEpochEnd'] }
-            );
+            // Создаем отдельные функции колбэков для каждого автоэнкодера
+            const callbacksMax = {
+                onEpochEnd: (epoch, logs) => {
+                    tfvis.show.fitCallbacks(
+                        { name: 'AE Max Pooling', tab: 'Autoencoders' },
+                        ['loss', 'val_loss']
+                    ).onEpochEnd(epoch, logs);
+                    this.log(`Max AE - Epoch ${epoch+1}: loss = ${logs.loss.toFixed(6)}, val_loss = ${logs.val_loss.toFixed(6)}`);
+                }
+            };
+
+            const callbacksAvg = {
+                onEpochEnd: (epoch, logs) => {
+                    tfvis.show.fitCallbacks(
+                        { name: 'AE Avg Pooling', tab: 'Autoencoders' },
+                        ['loss', 'val_loss']
+                    ).onEpochEnd(epoch, logs);
+                    this.log(`Avg AE - Epoch ${epoch+1}: loss = ${logs.loss.toFixed(6)}, val_loss = ${logs.val_loss.toFixed(6)}`);
+                }
+            };
 
             this.log('Training Max-Pooling Autoencoder…');
             let t = Date.now();
             await this.aeMax.fit(sp.trnNoisy, sp.trnClean, {
-                epochs: 15, batchSize: 64,
+                epochs: 10, 
+                batchSize: 256, // Увеличили batch size для ускорения
                 validationData: [sp.valNoisy, sp.valClean],
                 shuffle: true,
-                callbacks: makeCb('AE Max Pooling')
+                callbacks: callbacksMax
             });
             this.log('Max-AE done in ' + ((Date.now()-t)/1000).toFixed(1) + 's');
 
             this.log('Training Avg-Pooling Autoencoder…');
             t = Date.now();
             await this.aeAvg.fit(sp.trnNoisy, sp.trnClean, {
-                epochs: 15, batchSize: 64,
+                epochs: 10, 
+                batchSize: 256,
                 validationData: [sp.valNoisy, sp.valClean],
                 shuffle: true,
-                callbacks: makeCb('AE Avg Pooling')
+                callbacks: callbacksAvg
             });
             this.log('Avg-AE done in ' + ((Date.now()-t)/1000).toFixed(1) + 's');
 
@@ -319,6 +336,19 @@ class MNISTApp {
         // Encoder
         m.add(tf.layers.conv2d({ 
             inputShape: [28,28,1], 
+            filters: 16, // Уменьшили фильтры для ускорения
+            kernelSize: 3, 
+            activation: 'relu', 
+            padding: 'same' 
+        }));
+        
+        if (poolType === 'max') {
+            m.add(tf.layers.maxPooling2d({ poolSize: 2, padding: 'same' }));
+        } else {
+            m.add(tf.layers.averagePooling2d({ poolSize: 2, padding: 'same' }));
+        }
+        
+        m.add(tf.layers.conv2d({ 
             filters: 32, 
             kernelSize: 3, 
             activation: 'relu', 
@@ -331,22 +361,9 @@ class MNISTApp {
             m.add(tf.layers.averagePooling2d({ poolSize: 2, padding: 'same' }));
         }
         
+        // Bottleneck
         m.add(tf.layers.conv2d({ 
-            filters: 64, 
-            kernelSize: 3, 
-            activation: 'relu', 
-            padding: 'same' 
-        }));
-        
-        if (poolType === 'max') {
-            m.add(tf.layers.maxPooling2d({ poolSize: 2, padding: 'same' }));
-        } else {
-            m.add(tf.layers.averagePooling2d({ poolSize: 2, padding: 'same' }));
-        }
-        
-        // Bottleneck with more capacity
-        m.add(tf.layers.conv2d({ 
-            filters: 128, 
+            filters: 32, 
             kernelSize: 3, 
             activation: 'relu', 
             padding: 'same' 
@@ -354,7 +371,7 @@ class MNISTApp {
         
         // Decoder
         m.add(tf.layers.conv2dTranspose({ 
-            filters: 128, 
+            filters: 32, 
             kernelSize: 3, 
             strides: 2, 
             activation: 'relu', 
@@ -362,16 +379,9 @@ class MNISTApp {
         }));
         
         m.add(tf.layers.conv2dTranspose({ 
-            filters: 64, 
+            filters: 16, 
             kernelSize: 3, 
             strides: 2, 
-            activation: 'relu', 
-            padding: 'same' 
-        }));
-        
-        m.add(tf.layers.conv2d({ 
-            filters: 32, 
-            kernelSize: 3, 
             activation: 'relu', 
             padding: 'same' 
         }));
